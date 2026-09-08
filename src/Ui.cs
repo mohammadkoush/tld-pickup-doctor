@@ -592,7 +592,37 @@ namespace LDPickupDoctor
             Slider(Settings.RateThirst, 0f, 3f, "Thirst - how fast you dry out");
             Slider(Settings.RateHunger, 0f, 3f, "Food - how fast calories burn");
             Slider(Settings.RateStamina, 0f, 3f, "Stamina - how fast sprinting drains it");
-            Slider(Settings.RateHeldFuel, 0.05f, 3f, "Held item fuel - lamp, torch, flare, battery");
+            Slider(Settings.RateHeldFuel, 0.05f, 3f, "Item fuel - lamp, torch, flare, battery");
+            Toggle(Settings.FuelIncludesPlaced, "Fuel dial covers placed items too");
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(280f);
+            GUILayout.Label(Cheats.FuelSummary(), _mono);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(12f);
+            GUI.color = new Color(0.75f, 0.85f, 0.95f);
+            GUILayout.Label("Feats - the game's own positive effects. These are the only switches on "
+                + "this page that reach the save file, because a feat is a permanent unlock with save "
+                + "data of its own. Turning one off puts back the progress and the enabled state it "
+                + "found.", _label);
+            GUI.color = Color.white;
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(280f);
+            if (GUILayout.Button("all on", GUILayout.Width(90f))) Cheats.AllFeats(true);
+            if (GUILayout.Button("all off", GUILayout.Width(90f))) Cheats.AllFeats(false);
+            GUILayout.Space(12f);
+            GUILayout.Label(Cheats.FeatsOn + " of " + Cheats.FeatsSeen + " on", _mono);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+
+            for (int i = 0; i < Settings.FeatOrder.Count; i++)
+            {
+                Il2Cpp.FeatType ft = Settings.FeatOrder[i];
+                Toggle(Settings.FeatSwitches[ft], Settings.Spaced(ft.ToString()));
+            }
 
             GUILayout.Space(10f);
             string on = Cheats.Active();

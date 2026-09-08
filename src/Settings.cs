@@ -119,6 +119,14 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> RateHunger;
         public static MelonPreferences_Entry<float> RateStamina;
         public static MelonPreferences_Entry<float> RateHeldFuel;
+        public static MelonPreferences_Entry<bool> FuelIncludesPlaced;
+
+        // One switch per Feat, built by walking the game's own FeatType enum rather than by typing
+        // thirteen names out. If Hinterland adds a fourteenth, it appears here on its own.
+        public static readonly System.Collections.Generic.Dictionary<Il2Cpp.FeatType, MelonPreferences_Entry<bool>>
+            FeatSwitches = new System.Collections.Generic.Dictionary<Il2Cpp.FeatType, MelonPreferences_Entry<bool>>();
+        public static readonly System.Collections.Generic.List<Il2Cpp.FeatType> FeatOrder =
+            new System.Collections.Generic.List<Il2Cpp.FeatType>();
 
         // ---- keys ------------------------------------------------------------------------------
         public static MelonPreferences_Entry<string> KeyWindow;
@@ -302,6 +310,24 @@ namespace LDPickupDoctor
                     + "on a table is untouched, and nothing here is written into a save - the numbers "
                     + "come back from the game's own data on the next launch.");
 
+            FuelIncludesPlaced = _cheats.CreateEntry("FuelIncludesPlaced", true,
+                description: "Apply the fuel dial to placed and dropped items too, not only the one "
+                    + "in hand - a lantern left burning on a table, a torch stuck in the snow. Turn "
+                    + "it off to affect the held item alone.");
+
+            // Feats. Thirteen switches, generated from the game's own FeatType enum, so a feat added
+            // in a future update shows up here without this file being touched.
+            foreach (Il2Cpp.FeatType ft in System.Enum.GetValues(typeof(Il2Cpp.FeatType)))
+            {
+                FeatOrder.Add(ft);
+                FeatSwitches[ft] = _cheats.CreateEntry("Feat_" + ft.ToString(), false,
+                    description: "Unlock and enable the " + Spaced(ft.ToString()) + " feat. Feats are "
+                        + "saved with the run, so unlike everything else on this page this one does "
+                        + "reach the save file. Turning it off puts back the progress and the enabled "
+                        + "state it found, which is why it is worth turning off rather than just "
+                        + "walking away from.");
+            }
+
             KeySpeedUp = _keys.CreateEntry("SpeedUp", "PageUp",
                 description: "Raise the speed multiplier by SpeedStep.");
             KeySpeedDown = _keys.CreateEntry("SpeedDown", "PageDown",
@@ -381,6 +407,19 @@ namespace LDPickupDoctor
                 Log.OnceWarn("save-prefs", "writing MelonPreferences threw: " + e.Message
                     + " - the settings are still live in memory and the write is retried.");
             }
+        }
+
+        /// <summary>"BlizzardWalker" reads as "Blizzard Walker" on a row someone has to scan.</summary>
+        public static string Spaced(string camel)
+        {
+            if (string.IsNullOrEmpty(camel)) return camel;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(camel.Length + 4);
+            for (int i = 0; i < camel.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(camel[i]) && !char.IsUpper(camel[i - 1])) sb.Append(' ');
+                sb.Append(camel[i]);
+            }
+            return sb.ToString();
         }
 
         /// <summary>Hex to colour, with the brightness dial applied and a loud fallback.</summary>

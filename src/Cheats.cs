@@ -96,7 +96,9 @@ namespace LDPickupDoctor
             if (!Mathf.Approximately(Settings.RateThirst.Value, 1f)) s += " thirst=" + Settings.RateThirst.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateHunger.Value, 1f)) s += " hunger=" + Settings.RateHunger.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateStamina.Value, 1f)) s += " stamina=" + Settings.RateStamina.Value.ToString("0.00") + "x";
-            if (!Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)) s += " heldFuel=" + Settings.RateHeldFuel.Value.ToString("0.00") + "x";
+            if (!Mathf.Approximately(Settings.RateHeldFuel.Value, 1f))
+                s += " fuel=" + (FuelIsInfinite ? "infinite" : Settings.RateHeldFuel.Value.ToString("0.00") + "x");
+            if (FeatsOn > 0) s += " feats=" + FeatsOn;
             if (!Mathf.Approximately(Settings.CheatSpeed.Value, 1f))
                 s += " speed=" + Settings.CheatSpeed.Value.ToString("0.00") + "x";
             if (Settings.CheatInstantHarvest.Value) s += " instantHarvest";
@@ -118,7 +120,8 @@ namespace LDPickupDoctor
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
                 || !Mathf.Approximately(Settings.RateHunger.Value, 1f)
                 || !Mathf.Approximately(Settings.RateStamina.Value, 1f)
-                || !Mathf.Approximately(Settings.RateHeldFuel.Value, 1f);
+                || !Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)
+                || FeatsOn > 0;
         }
 
         /// <summary>Every frame. Only the three that have to be: speed, the clip, and the held item.</summary>
@@ -151,10 +154,11 @@ namespace LDPickupDoctor
         private static readonly Dictionary<int, float> _origFuel = new Dictionary<int, float>();
         private static readonly HashSet<int> _fuelScaled = new HashSet<int>();
 
+        /// <summary>The bottom of the dial is not "very slow", it is "does not run out".</summary>
+        private static bool FuelIsInfinite { get { return Settings.RateHeldFuel.Value <= 0.06f; } }
+
         private static void HeldFuel()
         {
-            float m = Mathf.Clamp(Settings.RateHeldFuel.Value, 0.01f, 5f);
-
             GearItem held = null;
             try
             {
@@ -163,54 +167,129 @@ namespace LDPickupDoctor
             }
             catch (System.Exception) { }
             if (held == null) return;
+            ApplyFuelTo(held);
+        }
+
+        /// <summary>
+        /// The same treatment for things that were put down rather than held: a lantern left burning
+        /// on a table, a torch stuck in the snow. Once a second rather than every frame, because it
+        /// means asking the scene for every light source and none of them changes that fast.
+        /// </summary>
+        private static float _nextPlacedFuelScan;
+
+        private static void PlacedFuel()
+        {
+            if (!Settings.FuelIncludesPlaced.Value) return;
+            if (Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)) return;
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextPlacedFuelScan) return;
+            _nextPlacedFuelScan = now + 1f;
+
+            float m = FuelMultiplier();
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<KeroseneLampItem> lamps =
+                    Object.FindObjectsOfType<KeroseneLampItem>();
+                for (int i = 0; i < lamps.Length; i++) ApplyLamp(lamps[i], m);
+            }
+            catch (System.Exception e) { FuelComplain("placed lamps", e); }
 
             try
             {
-                KeroseneLampItem lamp = held.m_KeroseneLampItem;
-                if (lamp != null)
-                {
-                    // A rate: multiply. Litres per hour goes up when the dial goes up.
-                    float litres = Sweep.Litres(lamp.m_FuelBurnPerHour);
-                    float want = FuelScale(lamp.GetInstanceID(), litres, m);
-                    lamp.m_FuelBurnPerHour = ItemLiquidVolume.FromLiters(want);
-                }
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<TorchItem> torches =
+                    Object.FindObjectsOfType<TorchItem>();
+                for (int i = 0; i < torches.Length; i++) ApplyTorch(torches[i], m);
             }
-            catch (System.Exception e) { FuelComplain("lamp", e); }
+            catch (System.Exception e) { FuelComplain("placed torches", e); }
 
             try
             {
-                TorchItem torch = held.m_TorchItem;
-                if (torch != null)
-                {
-                    // A lifetime: divide. More minutes of life is a slower drain.
-                    float mins = torch.m_BurnLifetimeMinutes;
-                    torch.m_BurnLifetimeMinutes = FuelScale(torch.GetInstanceID(), mins, 1f / m);
-                }
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlareItem> flares =
+                    Object.FindObjectsOfType<FlareItem>();
+                for (int i = 0; i < flares.Length; i++) ApplyFlare(flares[i], m);
             }
-            catch (System.Exception e) { FuelComplain("torch", e); }
+            catch (System.Exception e) { FuelComplain("placed flares", e); }
 
             try
             {
-                FlareItem flare = held.m_FlareItem;
-                if (flare != null)
-                {
-                    float mins = flare.m_BurnLifetimeMinutes;
-                    flare.m_BurnLifetimeMinutes = FuelScale(flare.GetInstanceID(), mins, 1f / m);
-                }
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlashlightItem> lights =
+                    Object.FindObjectsOfType<FlashlightItem>();
+                for (int i = 0; i < lights.Length; i++) ApplyFlashlight(lights[i], m);
             }
-            catch (System.Exception e) { FuelComplain("flare", e); }
+            catch (System.Exception e) { FuelComplain("placed flashlights", e); }
+        }
 
-            try
-            {
-                FlashlightItem torch = held.m_FlashlightItem;
-                if (torch != null)
-                {
-                    int id = torch.GetInstanceID();
-                    torch.m_LowBeamDuration = FuelScale(id * 2, torch.m_LowBeamDuration, 1f / m);
-                    torch.m_HighBeamDuration = FuelScale(id * 2 + 1, torch.m_HighBeamDuration, 1f / m);
-                }
-            }
-            catch (System.Exception e) { FuelComplain("flashlight", e); }
+        private static float FuelMultiplier()
+        {
+            return Mathf.Clamp(Settings.RateHeldFuel.Value, 0.01f, 5f);
+        }
+
+        private static void ApplyFuelTo(GearItem gi)
+        {
+            if (gi == null) return;
+            float m = FuelMultiplier();
+            try { ApplyLamp(gi.m_KeroseneLampItem, m); } catch (System.Exception e) { FuelComplain("lamp", e); }
+            try { ApplyTorch(gi.m_TorchItem, m); } catch (System.Exception e) { FuelComplain("torch", e); }
+            try { ApplyFlare(gi.m_FlareItem, m); } catch (System.Exception e) { FuelComplain("flare", e); }
+            try { ApplyFlashlight(gi.m_FlashlightItem, m); } catch (System.Exception e) { FuelComplain("flashlight", e); }
+        }
+
+        // A RATE: multiply. Litres an hour goes up when the dial goes up. Infinite means zero.
+        private static void ApplyLamp(KeroseneLampItem lamp, float m)
+        {
+            if (lamp == null) return;
+            float litres = Sweep.Litres(lamp.m_FuelBurnPerHour);
+            float want = FuelIsInfinite
+                ? FuelHold(lamp.GetInstanceID(), litres, 0f)
+                : FuelScale(lamp.GetInstanceID(), litres, m);
+            lamp.m_FuelBurnPerHour = ItemLiquidVolume.FromLiters(want);
+        }
+
+        // A LIFETIME: divide. More minutes of life is a slower drain. Infinite is a very large number
+        // rather than infinity, because a NaN or an infinity in a progress bar is a crash waiting.
+        private const float Forever = 10000000f;
+
+        private static void ApplyTorch(TorchItem torch, float m)
+        {
+            if (torch == null) return;
+            float mins = torch.m_BurnLifetimeMinutes;
+            torch.m_BurnLifetimeMinutes = FuelIsInfinite
+                ? FuelHold(torch.GetInstanceID(), mins, Forever)
+                : FuelScale(torch.GetInstanceID(), mins, 1f / m);
+        }
+
+        private static void ApplyFlare(FlareItem flare, float m)
+        {
+            if (flare == null) return;
+            float mins = flare.m_BurnLifetimeMinutes;
+            flare.m_BurnLifetimeMinutes = FuelIsInfinite
+                ? FuelHold(flare.GetInstanceID(), mins, Forever)
+                : FuelScale(flare.GetInstanceID(), mins, 1f / m);
+        }
+
+        private static void ApplyFlashlight(FlashlightItem light, float m)
+        {
+            if (light == null) return;
+            int id = light.GetInstanceID();
+            light.m_LowBeamDuration = FuelIsInfinite
+                ? FuelHold(id * 2, light.m_LowBeamDuration, Forever)
+                : FuelScale(id * 2, light.m_LowBeamDuration, 1f / m);
+            light.m_HighBeamDuration = FuelIsInfinite
+                ? FuelHold(id * 2 + 1, light.m_HighBeamDuration, Forever)
+                : FuelScale(id * 2 + 1, light.m_HighBeamDuration, 1f / m);
+        }
+
+        /// <summary>
+        /// Force a value while remembering the real one. Same baseline discipline as FuelScale: the
+        /// first call records what the game had, every call after returns the forced value, and the
+        /// recorded number is never taken from something already written here.
+        /// </summary>
+        private static float FuelHold(int id, float live, float forced)
+        {
+            if (!_origFuel.ContainsKey(id)) _origFuel[id] = live;
+            _fuelScaled.Add(id);
+            return forced;
         }
 
         /// <summary>
@@ -242,6 +321,15 @@ namespace LDPickupDoctor
             return baseline * multiplier;
         }
 
+        /// <summary>What the fuel dial is doing right now, in one line for the window.</summary>
+        public static string FuelSummary()
+        {
+            if (Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)) return "off - the game's own rates";
+            if (FuelIsInfinite) return "infinite" + (Settings.FuelIncludesPlaced.Value ? ", placed included" : ", held only");
+            return (Settings.RateHeldFuel.Value < 1f ? "lasts longer" : "burns quicker")
+                + (Settings.FuelIncludesPlaced.Value ? ", placed included" : ", held only");
+        }
+
         private static void FuelComplain(string what, System.Exception e)
         {
             Log.OnceWarn("fuel-" + what, "the " + what + " burn rate could not be set: " + e.Message
@@ -255,6 +343,151 @@ namespace LDPickupDoctor
             HarvestDurations();
             Fires();
             Rates();
+            PlacedFuel();
+            Feats();
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // FEATS - the game's own positive effects
+        //
+        // Thirteen of them, and the game keeps every one in FeatsManager.m_Feats, so there is no list
+        // to hard-code here: the switches are generated from the FeatType enum and matched against
+        // whatever the manager is holding.
+        //
+        // THESE ARE THE ONE THING ON THIS PAGE THAT REACHES THE SAVE FILE. A feat is a permanent
+        // unlock with its own save data, so "reversible" here cannot mean "stops applying when the
+        // game restarts" - it has to mean actively putting back what was found. So each one stores
+        // the progress it had and whether it was in the enabled list, and turning the switch off
+        // writes both back.
+        // ------------------------------------------------------------------------------------------
+        private static readonly Dictionary<int, float> _featProgressWas = new Dictionary<int, float>();
+        private static readonly HashSet<int> _featWasEnabled = new HashSet<int>();
+        private static readonly HashSet<int> _featTouched = new HashSet<int>();
+
+        public static int FeatsOn;
+        public static int FeatsSeen;
+
+        private static void Feats()
+        {
+            Il2CppSystem.Collections.Generic.List<Feat> all;
+            try { all = FeatsManager.m_Feats; }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("feats-list", "FeatsManager.m_Feats could not be read (" + e.Message
+                    + ") - the feat switches are doing nothing, and this is them saying so.");
+                return;
+            }
+            if (all == null) return;
+
+            FeatsSeen = all.Count;
+            int on = 0;
+
+            // An empty list with switches turned on is the silent no-op this whole mod exists to
+            // refuse: the tab would show them on and nothing at all would happen. Say it once.
+            if (FeatsSeen == 0)
+            {
+                bool anyWanted = false;
+                for (int i = 0; i < Settings.FeatOrder.Count; i++)
+                    if (Settings.FeatSwitches[Settings.FeatOrder[i]].Value) { anyWanted = true; break; }
+                if (anyWanted)
+                {
+                    Log.OnceWarn("feats-empty", "feat switches are on but FeatsManager is holding no "
+                        + "feats yet - they are instantiated when a run loads, so this is normal in a "
+                        + "menu and a real problem in a world. It keeps trying every sweep.");
+                }
+                return;
+            }
+            Log.Forget("feats-empty");
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                Feat f = all[i];
+                if (f == null) continue;
+
+                MelonLoader.MelonPreferences_Entry<bool> entry;
+                Il2Cpp.FeatType type;
+                try { type = f.m_FeatType; } catch (System.Exception) { continue; }
+                if (!Settings.FeatSwitches.TryGetValue(type, out entry)) continue;
+
+                int key = (int)type;
+
+                try
+                {
+                    if (entry.Value)
+                    {
+                        if (!_featTouched.Contains(key))
+                        {
+                            _featProgressWas[key] = f.GetNormalizedProgress();
+                            if (IsEnabledForRun(type)) _featWasEnabled.Add(key);
+                            _featTouched.Add(key);
+                            Log.Info("feat " + Settings.Spaced(type.ToString()) + " on (its progress was "
+                                + _featProgressWas[key].ToString("0.00") + ").");
+                        }
+
+                        // Written every sweep rather than once, because the game recomputes progress
+                        // as it is earned and would walk an unlocked feat back down again.
+                        if (f.GetNormalizedProgress() < 1f) f.SetNormalizedProgress(1f);
+                        EnableForRun(type, true);
+                        on++;
+                    }
+                    else if (_featTouched.Contains(key))
+                    {
+                        float was;
+                        _featProgressWas.TryGetValue(key, out was);
+                        f.SetNormalizedProgress(was);
+                        EnableForRun(type, _featWasEnabled.Contains(key));
+                        _featTouched.Remove(key);
+                        _featWasEnabled.Remove(key);
+                        _featProgressWas.Remove(key);
+                        Log.Info("feat " + Settings.Spaced(type.ToString()) + " off - progress put back to "
+                            + was.ToString("0.00") + ".");
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Log.OnceWarn("feat-" + type, "the " + Settings.Spaced(type.ToString())
+                        + " feat could not be set: " + e.Message + " - retried on the next sweep.");
+                }
+            }
+            FeatsOn = on;
+        }
+
+        private static bool IsEnabledForRun(Il2Cpp.FeatType type)
+        {
+            try
+            {
+                Il2CppSystem.Collections.Generic.List<Il2Cpp.FeatType> list =
+                    FeatEnabledTracker.m_FeatsEnabledThisSandbox;
+                return list != null && list.Contains(type);
+            }
+            catch (System.Exception) { return false; }
+        }
+
+        private static void EnableForRun(Il2Cpp.FeatType type, bool enabled)
+        {
+            try
+            {
+                Il2CppSystem.Collections.Generic.List<Il2Cpp.FeatType> list =
+                    FeatEnabledTracker.m_FeatsEnabledThisSandbox;
+                if (list == null) return;
+                bool has = list.Contains(type);
+                if (enabled && !has) list.Add(type);
+                else if (!enabled && has) list.Remove(type);
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("feat-tracker", "the enabled-feats list could not be changed: " + e.Message
+                    + " - the unlock still happens, the run flag may not.");
+            }
+        }
+
+        /// <summary>Every switch on this page turned off in one go, restores included.</summary>
+        public static void AllFeats(bool on)
+        {
+            for (int i = 0; i < Settings.FeatOrder.Count; i++)
+                Settings.FeatSwitches[Settings.FeatOrder[i]].Value = on;
+            Settings.SaveSoon();
+            Log.Info("all feats switched " + (on ? "on" : "off") + " - applied on the next sweep.");
         }
 
         // ------------------------------------------------------------------------------------------
