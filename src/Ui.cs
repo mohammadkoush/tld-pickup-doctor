@@ -49,11 +49,34 @@ namespace LDPickupDoctor
         private static CursorLockMode _lockWas;
         private static bool _visibleWas;
 
+        private static bool _placed;
+
+        /// <summary>
+        /// Put the window back where it was left. Done on the first open rather than at load,
+        /// because the preferences are read before Screen has a size worth clamping against - and a
+        /// window restored onto a monitor that is no longer there is a window that cannot be reached.
+        /// </summary>
+        private static void RestorePlacement()
+        {
+            if (_placed) return;
+            _placed = true;
+            float x = Settings.WindowX.Value;
+            float y = Settings.WindowY.Value;
+            if (Screen.width > 0 && Screen.height > 0)
+            {
+                x = Mathf.Clamp(x, -_rect.width + 80f, Screen.width - 80f);
+                y = Mathf.Clamp(y, 0f, Screen.height - 40f);
+            }
+            _rect.x = x;
+            _rect.y = y;
+        }
+
         public static void Toggle()
         {
             Open = !Open;
             if (Open)
             {
+                RestorePlacement();
                 _lockWas = Cursor.lockState;
                 _visibleWas = Cursor.visible;
                 PauseOn();
@@ -333,6 +356,11 @@ namespace LDPickupDoctor
             else if (e.type == EventType.MouseUp && _dragging)
             {
                 _dragging = false;
+                // Remembered on the way UP rather than during the drag: one write when it is put
+                // down, not sixty a second while it is being moved.
+                Settings.WindowX.Value = _rect.x;
+                Settings.WindowY.Value = _rect.y;
+                Settings.SaveSoon();
                 e.Use();
             }
         }
@@ -602,26 +630,21 @@ namespace LDPickupDoctor
 
             GUILayout.Space(12f);
             GUI.color = new Color(0.75f, 0.85f, 0.95f);
-            GUILayout.Label("Feats - the game's own positive effects. These are the only switches on "
-                + "this page that reach the save file, because a feat is a permanent unlock with save "
-                + "data of its own. Turning one off puts back the progress and the enabled state it "
-                + "found.", _label);
+            GUILayout.Label("Timed buffs. These hold a countdown that is already running - they never "
+                + "grant a buff that was not earned, so the effect has to be picked up the ordinary "
+                + "way first. Nothing needs undoing: switch it off and the same clock resumes.", _label);
             GUI.color = Color.white;
+            Toggle(Settings.HoldBuffTimers, "Hold the buff countdowns");
+            Toggle(Settings.HoldWellFed, "Hold Well Fed");
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Space(280f);
-            if (GUILayout.Button("all on", GUILayout.Width(90f))) Cheats.AllFeats(true);
-            if (GUILayout.Button("all off", GUILayout.Width(90f))) Cheats.AllFeats(false);
-            GUILayout.Space(12f);
-            GUILayout.Label(Cheats.FeatsOn + " of " + Cheats.FeatsSeen + " on", _mono);
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.Space(4f);
-
-            for (int i = 0; i < Settings.FeatOrder.Count; i++)
+            List<string> buffs = Cheats.BuffLines();
+            for (int i = 0; i < buffs.Count; i++)
             {
-                Il2Cpp.FeatType ft = Settings.FeatOrder[i];
-                Toggle(Settings.FeatSwitches[ft], Settings.Spaced(ft.ToString()));
+                GUILayout.BeginHorizontal();
+                GUILayout.Space(280f);
+                GUILayout.Label(buffs[i], _mono);
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
             }
 
             GUILayout.Space(10f);

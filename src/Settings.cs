@@ -121,12 +121,10 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> RateHeldFuel;
         public static MelonPreferences_Entry<bool> FuelIncludesPlaced;
 
-        // One switch per Feat, built by walking the game's own FeatType enum rather than by typing
-        // thirteen names out. If Hinterland adds a fourteenth, it appears here on its own.
-        public static readonly System.Collections.Generic.Dictionary<Il2Cpp.FeatType, MelonPreferences_Entry<bool>>
-            FeatSwitches = new System.Collections.Generic.Dictionary<Il2Cpp.FeatType, MelonPreferences_Entry<bool>>();
-        public static readonly System.Collections.Generic.List<Il2Cpp.FeatType> FeatOrder =
-            new System.Collections.Generic.List<Il2Cpp.FeatType>();
+        // The timed buffs - Improved Rest, Warming Up, Reduced Fatigue and the rest. These hold a
+        // countdown that is already running; they never start one.
+        public static MelonPreferences_Entry<bool> HoldBuffTimers;
+        public static MelonPreferences_Entry<bool> HoldWellFed;
 
         // ---- keys ------------------------------------------------------------------------------
         public static MelonPreferences_Entry<string> KeyWindow;
@@ -145,6 +143,8 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> TooltipDelaySeconds;
         public static MelonPreferences_Entry<bool> WindowPausesCursor;
         public static MelonPreferences_Entry<bool> WindowPausesGame;
+        public static MelonPreferences_Entry<float> WindowX;
+        public static MelonPreferences_Entry<float> WindowY;
 
         // ---- diagnostics -----------------------------------------------------------------------
         public static MelonPreferences_Entry<bool> DiagEnabled;
@@ -315,18 +315,15 @@ namespace LDPickupDoctor
                     + "in hand - a lantern left burning on a table, a torch stuck in the snow. Turn "
                     + "it off to affect the held item alone.");
 
-            // Feats. Thirteen switches, generated from the game's own FeatType enum, so a feat added
-            // in a future update shows up here without this file being touched.
-            foreach (Il2Cpp.FeatType ft in System.Enum.GetValues(typeof(Il2Cpp.FeatType)))
-            {
-                FeatOrder.Add(ft);
-                FeatSwitches[ft] = _cheats.CreateEntry("Feat_" + ft.ToString(), false,
-                    description: "Unlock and enable the " + Spaced(ft.ToString()) + " feat. Feats are "
-                        + "saved with the run, so unlike everything else on this page this one does "
-                        + "reach the save file. Turning it off puts back the progress and the enabled "
-                        + "state it found, which is why it is worth turning off rather than just "
-                        + "walking away from.");
-            }
+            HoldBuffTimers = _cheats.CreateEntry("HoldBuffTimers", false,
+                description: "Stop the countdown on the timed buffs: Improved Rest, Warming Up, "
+                    + "Reduced Fatigue, the condition-over-time bonus and the pie bonus. It only "
+                    + "holds a timer that is ALREADY RUNNING - it never grants a buff that was not "
+                    + "earned, so a buff has to be picked up in the ordinary way first.");
+            HoldWellFed = _cheats.CreateEntry("HoldWellFed", false,
+                description: "Keep Well Fed from lapsing. Well Fed has no clock of its own - it ends "
+                    + "when the stomach empties - so this holds the state rather than a timer, and "
+                    + "like the others it will not start one that was not already there.");
 
             KeySpeedUp = _keys.CreateEntry("SpeedUp", "PageUp",
                 description: "Raise the speed multiplier by SpeedStep.");
@@ -352,6 +349,11 @@ namespace LDPickupDoctor
                     + "the row you were trying to read. Zero gives the instant behaviour back.");
             WindowPausesCursor = _iface.CreateEntry("FreeCursor", true,
                 description: "Release the mouse from the game while the window is open.");
+            WindowX = _iface.CreateEntry("WindowX", 60f,
+                description: "Where the window sits, across. It is remembered when the window is "
+                    + "dragged, so it opens where it was left rather than back in the corner.");
+            WindowY = _iface.CreateEntry("WindowY", 60f,
+                description: "Where the window sits, down.");
             WindowPausesGame = _iface.CreateEntry("PauseGame", true,
                 description: "Pause the game while the window is open, and resume on the way out. "
                     + "It sets the game's own pause flag and re-asserts it every frame; if the game "

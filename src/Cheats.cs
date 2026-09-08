@@ -45,6 +45,16 @@ namespace LDPickupDoctor
         // back on the way out was wrong too. Keyed by instance id, a controller we have already seen
         // is never re-baselined, and a genuinely new one starts from its own clean value.
         private static readonly Dictionary<int, float> _origAccelById = new Dictionary<int, float>();
+        private static readonly Dictionary<int, float> _origVelMaxById = new Dictionary<int, float>();
+        private static float _origVelocityMax;
+
+        // Measurement, so "it did not work" is never the end of the conversation again. The mod
+        // watches how fast the player actually moves and prints the fastest it has seen, which is a
+        // fact a log can carry and an impression cannot.
+        private static Vector3 _lastPos;
+        private static float _lastPosAt;
+        private static float _fastestSeen;
+        private static float _nextSpeedReport;
 
         // ---- carry -------------------------------------------------------------------------------
         //
@@ -98,7 +108,7 @@ namespace LDPickupDoctor
             if (!Mathf.Approximately(Settings.RateStamina.Value, 1f)) s += " stamina=" + Settings.RateStamina.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateHeldFuel.Value, 1f))
                 s += " fuel=" + (FuelIsInfinite ? "infinite" : Settings.RateHeldFuel.Value.ToString("0.00") + "x");
-            if (FeatsOn > 0) s += " feats=" + FeatsOn;
+            if (BuffsHeld > 0) s += " buffsHeld=" + BuffsHeld;
             if (!Mathf.Approximately(Settings.CheatSpeed.Value, 1f))
                 s += " speed=" + Settings.CheatSpeed.Value.ToString("0.00") + "x";
             if (Settings.CheatInstantHarvest.Value) s += " instantHarvest";
@@ -121,7 +131,8 @@ namespace LDPickupDoctor
                 || !Mathf.Approximately(Settings.RateHunger.Value, 1f)
                 || !Mathf.Approximately(Settings.RateStamina.Value, 1f)
                 || !Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)
-                || FeatsOn > 0;
+                || Settings.HoldBuffTimers.Value
+                || Settings.HoldWellFed.Value;
         }
 
         /// <summary>Every frame. Only the three that have to be: speed, the clip, and the held item.</summary>
@@ -344,151 +355,147 @@ namespace LDPickupDoctor
             Fires();
             Rates();
             PlacedFuel();
-            Feats();
+            BuffTimers();
         }
 
         // ------------------------------------------------------------------------------------------
-        // FEATS - the game's own positive effects
+        // THE TIMED BUFFS - the positive effects that arrive with a countdown
         //
-        // Thirteen of them, and the game keeps every one in FeatsManager.m_Feats, so there is no list
-        // to hard-code here: the switches are generated from the FeatType enum and matched against
-        // whatever the manager is holding.
+        // Improved Rest, Warming Up, Reduced Fatigue, the condition-over-time bonus, the pie bonus.
+        // The game keeps each one as a pair of floats on PlayerManager - hours remaining and the
+        // duration it started from - and counts the first one down in game time.
         //
-        // THESE ARE THE ONE THING ON THIS PAGE THAT REACHES THE SAVE FILE. A feat is a permanent
-        // unlock with its own save data, so "reversible" here cannot mean "stops applying when the
-        // game restarts" - it has to mean actively putting back what was found. So each one stores
-        // the progress it had and whether it was in the enabled list, and turning the switch off
-        // writes both back.
+        // THIS ONLY HOLDS A CLOCK THAT IS ALREADY RUNNING. If a buff is not active its remaining
+        // hours are zero, and zero is left alone, so nothing here can grant an effect that was not
+        // earned in the ordinary way. That is a deliberate line: stopping a countdown is a different
+        // thing from handing out the buff, and only one of them was asked for.
+        //
+        // Nothing needs restoring afterwards. A held timer is simply not decremented; switch it off
+        // and the same clock resumes falling from wherever it stands.
         // ------------------------------------------------------------------------------------------
-        private static readonly Dictionary<int, float> _featProgressWas = new Dictionary<int, float>();
-        private static readonly HashSet<int> _featWasEnabled = new HashSet<int>();
-        private static readonly HashSet<int> _featTouched = new HashSet<int>();
+        public static int BuffsHeld;
 
-        public static int FeatsOn;
-        public static int FeatsSeen;
-
-        private static void Feats()
+        private struct BuffRow
         {
-            Il2CppSystem.Collections.Generic.List<Feat> all;
-            try { all = FeatsManager.m_Feats; }
+            public string Name;
+            public float Remaining;
+            public float Duration;
+        }
+
+        private static readonly List<BuffRow> _buffRows = new List<BuffRow>();
+
+        private static void BuffTimers()
+        {
+            _buffRows.Clear();
+            BuffsHeld = 0;
+
+            PlayerManager pm = null;
+            try { pm = GameManager.GetPlayerManagerComponent(); } catch (System.Exception) { }
+            if (pm == null) return;
+
+            bool hold = Settings.HoldBuffTimers.Value;
+
+            try
+            {
+                pm.m_ConditionRestBuffHoursRemaining =
+                    Hold("Improved Rest", pm.m_ConditionRestBuffHoursRemaining, pm.m_ConditionRestBuffHoursDuration, hold);
+                pm.m_FreezingBuffHoursRemaining =
+                    Hold("Warming Up", pm.m_FreezingBuffHoursRemaining, pm.m_FreezingBuffHoursDuration, hold);
+                pm.m_FatigueBuffHoursRemaining =
+                    Hold("Reduced Fatigue", pm.m_FatigueBuffHoursRemaining, pm.m_FatigueBuffHoursDuration, hold);
+                pm.m_ConditionPerHourHoursRemaining =
+                    Hold("Condition bonus", pm.m_ConditionPerHourHoursRemaining, pm.m_ConditionPerHourHoursDuration, hold);
+                pm.m_PumpkinPieBuffHoursRemaining =
+                    Hold("Pie bonus", pm.m_PumpkinPieBuffHoursRemaining, pm.m_PumpkinPieBuffHoursDuration, hold);
+            }
             catch (System.Exception e)
             {
-                Log.OnceWarn("feats-list", "FeatsManager.m_Feats could not be read (" + e.Message
-                    + ") - the feat switches are doing nothing, and this is them saying so.");
-                return;
+                Log.OnceWarn("buff-timers", "the buff timers could not be read or written: " + e.Message
+                    + " - retried every sweep, and the switch stays where it was put.");
             }
-            if (all == null) return;
 
-            FeatsSeen = all.Count;
-            int on = 0;
-
-            // An empty list with switches turned on is the silent no-op this whole mod exists to
-            // refuse: the tab would show them on and nothing at all would happen. Say it once.
-            if (FeatsSeen == 0)
+            // Well Fed has no clock. It is a state that ends when the stomach empties, so holding it
+            // means holding the flag, and the same rule applies: only if it is already true.
+            if (Settings.HoldWellFed.Value)
             {
-                bool anyWanted = false;
-                for (int i = 0; i < Settings.FeatOrder.Count; i++)
-                    if (Settings.FeatSwitches[Settings.FeatOrder[i]].Value) { anyWanted = true; break; }
-                if (anyWanted)
-                {
-                    Log.OnceWarn("feats-empty", "feat switches are on but FeatsManager is holding no "
-                        + "feats yet - they are instantiated when a run loads, so this is normal in a "
-                        + "menu and a real problem in a world. It keeps trying every sweep.");
-                }
-                return;
-            }
-            Log.Forget("feats-empty");
-
-            for (int i = 0; i < all.Count; i++)
-            {
-                Feat f = all[i];
-                if (f == null) continue;
-
-                MelonLoader.MelonPreferences_Entry<bool> entry;
-                Il2Cpp.FeatType type;
-                try { type = f.m_FeatType; } catch (System.Exception) { continue; }
-                if (!Settings.FeatSwitches.TryGetValue(type, out entry)) continue;
-
-                int key = (int)type;
-
                 try
                 {
-                    if (entry.Value)
+                    WellFed wf = Object.FindObjectOfType<WellFed>();
+                    if (wf != null)
                     {
-                        if (!_featTouched.Contains(key))
+                        if (wf.m_Active)
                         {
-                            _featProgressWas[key] = f.GetNormalizedProgress();
-                            if (IsEnabledForRun(type)) _featWasEnabled.Add(key);
-                            _featTouched.Add(key);
-                            Log.Info("feat " + Settings.Spaced(type.ToString()) + " on (its progress was "
-                                + _featProgressWas[key].ToString("0.00") + ").");
+                            _wellFedWasActive = true;
+                            BuffsHeld++;
                         }
-
-                        // Written every sweep rather than once, because the game recomputes progress
-                        // as it is earned and would walk an unlocked feat back down again.
-                        if (f.GetNormalizedProgress() < 1f) f.SetNormalizedProgress(1f);
-                        EnableForRun(type, true);
-                        on++;
-                    }
-                    else if (_featTouched.Contains(key))
-                    {
-                        float was;
-                        _featProgressWas.TryGetValue(key, out was);
-                        f.SetNormalizedProgress(was);
-                        EnableForRun(type, _featWasEnabled.Contains(key));
-                        _featTouched.Remove(key);
-                        _featWasEnabled.Remove(key);
-                        _featProgressWas.Remove(key);
-                        Log.Info("feat " + Settings.Spaced(type.ToString()) + " off - progress put back to "
-                            + was.ToString("0.00") + ".");
+                        else if (_wellFedWasActive)
+                        {
+                            // It lapsed while being held. Put it back, once, and say so - a switch
+                            // that silently fails to hold the one buff it names is worse than none.
+                            wf.m_Active = true;
+                            Log.OnceInfo("wellfed-held", "Well Fed lapsed while it was being held, so "
+                                + "it was set active again. It is a state rather than a timer, which "
+                                + "is why this one needs re-asserting instead of topping up.");
+                            BuffsHeld++;
+                        }
                     }
                 }
                 catch (System.Exception e)
                 {
-                    Log.OnceWarn("feat-" + type, "the " + Settings.Spaced(type.ToString())
-                        + " feat could not be set: " + e.Message + " - retried on the next sweep.");
+                    Log.OnceWarn("wellfed", "Well Fed could not be held: " + e.Message
+                        + " - retried every sweep.");
                 }
             }
-            FeatsOn = on;
-        }
-
-        private static bool IsEnabledForRun(Il2Cpp.FeatType type)
-        {
-            try
+            else
             {
-                Il2CppSystem.Collections.Generic.List<Il2Cpp.FeatType> list =
-                    FeatEnabledTracker.m_FeatsEnabledThisSandbox;
-                return list != null && list.Contains(type);
-            }
-            catch (System.Exception) { return false; }
-        }
-
-        private static void EnableForRun(Il2Cpp.FeatType type, bool enabled)
-        {
-            try
-            {
-                Il2CppSystem.Collections.Generic.List<Il2Cpp.FeatType> list =
-                    FeatEnabledTracker.m_FeatsEnabledThisSandbox;
-                if (list == null) return;
-                bool has = list.Contains(type);
-                if (enabled && !has) list.Add(type);
-                else if (!enabled && has) list.Remove(type);
-            }
-            catch (System.Exception e)
-            {
-                Log.OnceWarn("feat-tracker", "the enabled-feats list could not be changed: " + e.Message
-                    + " - the unlock still happens, the run flag may not.");
+                _wellFedWasActive = false;
             }
         }
 
-        /// <summary>Every switch on this page turned off in one go, restores included.</summary>
-        public static void AllFeats(bool on)
+        private static bool _wellFedWasActive;
+
+        /// <summary>
+        /// Top one countdown back up to the duration it started from - but only if it is running.
+        /// The row is recorded either way, so the window can show what is active without a second
+        /// pass over the same fields.
+        /// </summary>
+        private static float Hold(string name, float remaining, float duration, bool hold)
         {
-            for (int i = 0; i < Settings.FeatOrder.Count; i++)
-                Settings.FeatSwitches[Settings.FeatOrder[i]].Value = on;
-            Settings.SaveSoon();
-            Log.Info("all feats switched " + (on ? "on" : "off") + " - applied on the next sweep.");
+            BuffRow row = new BuffRow();
+            row.Name = name;
+            row.Remaining = remaining;
+            row.Duration = duration;
+            _buffRows.Add(row);
+
+            if (!hold) return remaining;
+            if (remaining <= 0.001f) return remaining;      // not running: never start one
+
+            BuffsHeld++;
+            if (duration <= 0f)
+            {
+                // A running timer with no duration to top up to. Hold it where it is rather than
+                // inventing a number, and say once that the pair did not make sense.
+                Log.OnceWarn("buff-no-duration", "a buff is counting down with no recorded duration, "
+                    + "so it is being held at its current value rather than topped up.");
+                return remaining;
+            }
+            return duration > remaining ? duration : remaining;
         }
+
+        /// <summary>Every timed buff and where its clock stands, for the window.</summary>
+        public static List<string> BuffLines()
+        {
+            List<string> lines = new List<string>();
+            for (int i = 0; i < _buffRows.Count; i++)
+            {
+                BuffRow r = _buffRows[i];
+                if (r.Remaining <= 0.001f) lines.Add(r.Name + ": not active");
+                else lines.Add(r.Name + ": " + r.Remaining.ToString("0.00") + "h of "
+                    + r.Duration.ToString("0.00") + "h");
+            }
+            return lines;
+        }
+
 
         // ------------------------------------------------------------------------------------------
         // SURVIVAL RATES
@@ -693,12 +700,26 @@ namespace LDPickupDoctor
                 {
                     _origAcceleration = _controller.MotorAcceleration;
                     _origAccelById[id] = _origAcceleration;
-                    Log.Info("speed cheat on - the game's own acceleration is "
-                        + _origAcceleration.ToString("0.0000") + ", now scaled by "
-                        + mult.ToString("0.00") + "x.");
+                    _origVelocityMax = _controller.MotorVelocityMax;
+                    _origVelMaxById[id] = _origVelocityMax;
+                    Log.Info("speed cheat on - acceleration " + _origAcceleration.ToString("0.0000")
+                        + ", velocity cap " + _origVelocityMax.ToString("0.0000")
+                        + ", both scaled by " + mult.ToString("0.00") + "x.");
                 }
+                _origVelMaxById.TryGetValue(id, out _origVelocityMax);
                 _haveAcceleration = true;
+
+                // BOTH FIELDS, and the second one is why the first build did nothing.
+                //
+                // Raising MotorAcceleration only makes the character reach its top speed sooner; the
+                // top speed itself is MotorVelocityMax, and it was left where it was. The log looked
+                // right - acceleration 0.0300 scaled by 8.00x - and the character walked at exactly
+                // the same pace, because it was hitting the same cap a fraction earlier. A number
+                // changing is not the same as an effect happening, which is the whole reason this
+                // file measures rather than assumes.
                 _controller.MotorAcceleration = _origAcceleration * mult;
+                _controller.MotorVelocityMax = _origVelocityMax * mult;
+                Measure();
             }
             catch (System.Exception e)
             {
@@ -708,6 +729,50 @@ namespace LDPickupDoctor
                 _haveAcceleration = false;
                 Log.OnceWarn("speed-threw", "writing MotorAcceleration threw: " + e.Message
                     + " - the controller is looked up again next frame and the cheat stays on.");
+            }
+        }
+
+        /// <summary>
+        /// How fast the player is actually moving, in metres a second, horizontally.
+        ///
+        /// This exists because "player speed did not work" and the log said the cheat was applied -
+        /// both true at once, and neither of them a measurement. A number written into a field is
+        /// not an effect; this is the difference, printed every half minute while the dial is off
+        /// its neutral position.
+        /// </summary>
+        private static void Measure()
+        {
+            Transform p = null;
+            try { p = GameManager.GetPlayerTransform(); } catch (System.Exception) { }
+            if (p == null) return;
+
+            float now = Time.realtimeSinceStartup;
+            Vector3 here = p.position;
+
+            if (_lastPosAt > 0f && now > _lastPosAt)
+            {
+                float dt = now - _lastPosAt;
+                if (dt > 0.001f && dt < 0.5f)
+                {
+                    Vector3 d = here - _lastPos;
+                    d.y = 0f;
+                    float mps = d.magnitude / dt;
+                    if (mps < 40f && mps > _fastestSeen) _fastestSeen = mps;   // 40 filters teleports
+                }
+            }
+            _lastPos = here;
+            _lastPosAt = now;
+
+            if (now >= _nextSpeedReport)
+            {
+                _nextSpeedReport = now + 30f;
+                if (_fastestSeen > 0.1f)
+                {
+                    Log.Info("fastest ground speed seen: " + _fastestSeen.ToString("0.00")
+                        + " m/s at a " + Settings.CheatSpeed.Value.ToString("0.00")
+                        + "x dial. Walking is about 1.4 and sprinting about 3.5 unmodified.");
+                }
+                _fastestSeen = 0f;
             }
         }
 

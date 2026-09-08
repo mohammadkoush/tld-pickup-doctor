@@ -170,7 +170,8 @@ outline colours across a map you have to walk.
 | Stamina rate | Scales `PlayerMovement.m_SprintStaminaUsagePerSecond`; at the bottom it uses the game's own unlimited-sprint flag. | `1.00` |
 | Item fuel | Lamp fuel, torch and flare burn time, flashlight battery. At the bottom of the slider it is infinite. | `1.00` |
 | Fuel covers placed items | Applies the fuel dial to lanterns and torches left burning, not only the one in hand. | on |
-| Feats (13) | Unlock and enable any of the game's own feats, one switch each, plus all on and all off. | off |
+| Hold buff countdowns | Stops the timer on Improved Rest, Warming Up, Reduced Fatigue, the condition bonus and the pie bonus. Only holds a clock already running. | off |
+| Hold Well Fed | Keeps Well Fed from lapsing. It is a state rather than a timer, so it is re-asserted rather than topped up. | off |
 
 The rate dials go **both ways** - below 1 is gentler, above 1 is harsher - so they are as much
 a difficulty dial as a cheat. Each scales the game's own per-hour numbers rather than replacing them

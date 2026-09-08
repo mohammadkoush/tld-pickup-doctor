@@ -411,3 +411,52 @@ The bottom of the slider (0.06 or less) is not "very slow", it is **infinite**: 
 zero litres an hour and the lifetimes go to a large constant rather than to infinity, because a NaN
 or an infinity inside a progress bar is a crash waiting to happen. `FuelHold` records the real value
 before forcing, exactly as `FuelScale` does, so the way back is still there.
+
+---
+
+## 2026-09-08 - feats were the wrong "positive effects", and the right ones are the timed buffs
+
+Feats are achievement-style permanent unlocks, and unlocking them would spoil the game rather than
+speed it up. The switches were never used - the log carries **zero** feat lines, and the code only
+writes when a switch is on, all of which default to false - so no save was touched. The whole
+section is removed rather than left on the page: it was the only thing on it that reached a save
+file, and a stray click on a switch nobody wants is not a risk worth carrying. It is in git history
+if it is ever wanted.
+
+What was actually meant is the **timed buffs**: Improved Rest, Warming Up, Reduced Fatigue, the
+condition-over-time bonus, the pie bonus - the positive effects that arrive with a countdown. The
+game keeps each as a pair of floats on `PlayerManager`:
+
+    m_ConditionRestBuffHoursRemaining  / m_ConditionRestBuffHoursDuration    Improved Rest
+    m_FreezingBuffHoursRemaining       / m_FreezingBuffHoursDuration         Warming Up
+    m_FatigueBuffHoursRemaining        / m_FatigueBuffHoursDuration          Reduced Fatigue
+    m_ConditionPerHourHoursRemaining   / m_ConditionPerHourHoursDuration     condition bonus
+    m_PumpkinPieBuffHoursRemaining     / m_PumpkinPieBuffHoursDuration       pie bonus
+
+`Cheats.BuffTimers` tops each one back up to its own duration - **but only if it is already above
+zero**. A buff that is not running is left at zero, so the switch can never grant an effect that was
+not earned. Stopping a countdown and handing out a buff are different things and only one was asked
+for. Nothing needs restoring: a held timer is simply not decremented, and switching off resumes the
+same clock.
+
+Well Fed has no clock - it ends when the stomach empties - so it is held by re-asserting its state
+flag, and only if it was already active.
+
+## 2026-09-08 - the speed cheat wrote the right field and the wrong one was missing
+
+"Player speed did not work", while the log said the cheat was applied. Both true. The first build
+scaled `vp_FPSController.MotorAcceleration` only, which controls how quickly top speed is REACHED -
+the top speed itself is `MotorVelocityMax`, and it was left alone at 0.0800. So the character
+reached the same cap a fraction sooner and walked at exactly the same pace.
+
+Both fields are scaled now. And because a number changing in a log is not evidence that anything
+happened, `Cheats.Measure` samples the player's horizontal displacement and prints the fastest
+ground speed it has seen every thirty seconds while the dial is off neutral, with the unmodified
+figures (about 1.4 m/s walking, 3.5 sprinting) beside it for comparison.
+
+## 2026-09-08 - the window remembers where it was put
+
+`Interface.WindowX` / `WindowY`, written on mouse-up rather than during the drag - one write when it
+is put down, not sixty a second while it is moving. Restored on the first open rather than at load,
+because preferences are read before `Screen` has a size to clamp against, and a window restored onto
+a monitor that is no longer there cannot be reached.
