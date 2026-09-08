@@ -536,7 +536,10 @@ namespace LDPickupDoctor
         private static void KeysTab()
         {
             Note("Every hotkey lives here, wherever it was bound. Click a key to rebind it, then "
-               + "press the new one. Escape cancels the rebind.");
+               + "press the new one. Escape cancels the rebind. With the modifier on, every one "
+               + "of these needs Ctrl held - which is what keeps them clear of the game's own "
+               + "function keys.");
+            Toggle(Settings.KeysNeedCtrl, "Every hotkey needs Ctrl held");
             Key(Settings.KeyWindow, "Open this window");
             Key(Settings.KeySweepRoom, "Sweep the room");
             Key(Settings.KeyToggleHighlight, "Outlines on or off");

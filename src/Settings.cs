@@ -141,6 +141,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> SaveCooldownSeconds;
         public static MelonPreferences_Entry<string> KeySpeedUp;
         public static MelonPreferences_Entry<string> KeySpeedDown;
+        public static MelonPreferences_Entry<bool> KeysNeedCtrl;
 
         // ---- interface -------------------------------------------------------------------------
         public static MelonPreferences_Entry<float> WindowOpacity;
@@ -285,6 +286,13 @@ namespace LDPickupDoctor
                 description: "Fires, stoves and fireplaces never go out. This sets the game's own "
                     + "m_IsPerpetual flag, the one it uses for scripted fires, and clears it again "
                     + "when you turn this off.");
+
+            KeysNeedCtrl = _keys.CreateEntry("NeedCtrl", true,
+                description: "Require Ctrl to be held with every hotkey here. ON by default, and "
+                    + "it is not fussiness: The Long Dark binds its own high-resolution "
+                    + "screenshot to a bare function key, so a mod hotkey that shares one drops "
+                    + "a ten megabyte PNG on the desktop every time it is pressed. A modifier "
+                    + "removes the whole class of collision rather than dodging one key.");
 
             KeyWindow = _keys.CreateEntry("Window", "F10", description: "Open and close the settings window.");
             KeySweepRoom = _keys.CreateEntry("SweepRoom", "F7", description: "Take everything eligible nearby, once.");

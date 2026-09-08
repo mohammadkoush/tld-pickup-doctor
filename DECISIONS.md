@@ -628,3 +628,34 @@ has actually slipped, so an item at full costs one comparison a frame.
 
 Held only, for the same reason the fuel dial is: it answers "the rifle I am shooting keeps
 degrading" without quietly repairing a pack full of clothing that nobody mentioned.
+
+---
+
+## 2026-09-08 - fifty-two screenshots on the desktop, and they were ours
+
+"How come my desktop is full of screenshots?"
+
+Counted first: **52 files**, named `screen_<guid>_hi.png`, about 10 MB each - **409 MB** - all created
+between 00:18 and 02:33 on 2026-09-08, which is exactly the window of the previous night's testing.
+None in the game folder, none in the save folder, so the desktop is where they were written.
+
+The line that stated the cause was our own log against the file times:
+
+    01:04:42.252   auto pickup off      (the mod's F9 toggle)
+    01:04:42, 01:04:42, 01:04:43        (three screenshots)
+
+The Long Dark binds its own high-resolution screenshot - `InputManager.TakeHighResolutionScreenshot`
+- to a bare function key, and F9 was one of ours. Every press did both things, and the repeats are
+the key being held for a moment.
+
+**The fix is the class, not the key.** `Keys.NeedCtrl`, on by default, requires Ctrl with every mod
+hotkey. Dodging F9 specifically would have left the next collision just as silent, and there was no
+way to know which other function keys the game claims without finding out the same expensive way.
+The save key's own Ctrl flag folds into it.
+
+The 52 files were moved to `C:\Users\moham\Downloads\Claude\tld-stray-screenshots` rather than
+deleted - they are screenshots of his own play and that is his call, not this mod's.
+
+**This is the second time a hotkey collision has cost real time on this station** - the Green Hell
+notes carry the first. Worth stating as a rule: a mod hotkey on a bare key is a bet that the game
+does not want that key, and a mod cannot see the other side of that bet.

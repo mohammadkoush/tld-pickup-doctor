@@ -193,14 +193,36 @@ namespace LDPickupDoctor
             }
         }
 
+        /// <summary>
+        /// Is the modifier satisfied? See Keys.NeedCtrl for why this exists at all.
+        ///
+        /// THE COST OF NOT HAVING IT, measured rather than imagined: fifty-two high-resolution
+        /// screenshots, about 550 MB, appeared on the desktop across one evening of testing. The
+        /// proof was one line of our own log against the file times -
+        ///
+        ///     01:04:42.252  auto pickup off          (the mod, on F9)
+        ///     01:04:42, 01:04:42, 01:04:43           (three screenshots)
+        ///
+        /// - because The Long Dark binds its own high-resolution screenshot to the same bare key.
+        /// A modifier removes the whole class of collision instead of dodging the one key that was
+        /// caught, which matters because the next collision would be just as silent.
+        /// </summary>
+        private static bool Modifier()
+        {
+            if (!Settings.KeysNeedCtrl.Value) return true;
+            return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        }
+
         private void Hotkeys()
         {
             try
             {
-                if (Input.GetKeyDown(Settings.Key(Settings.KeyWindow, KeyCode.F10)))
+                bool mod = Modifier();
+
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyWindow, KeyCode.F10)))
                     Ui.Toggle();
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeyToggleHighlight, KeyCode.F8)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyToggleHighlight, KeyCode.F8)))
                 {
                     Settings.HighlightEnabled.Value = !Settings.HighlightEnabled.Value;
                     if (!Settings.HighlightEnabled.Value) Highlight.Off();
@@ -208,29 +230,30 @@ namespace LDPickupDoctor
                     Log.Info("outlines " + (Settings.HighlightEnabled.Value ? "on" : "off"));
                 }
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeyTogglePickup, KeyCode.F9)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyTogglePickup, KeyCode.F9)))
                 {
                     Settings.PickupEnabled.Value = !Settings.PickupEnabled.Value;
                     Settings.SaveSoon();
                     Log.Info("auto pickup " + (Settings.PickupEnabled.Value ? "on" : "off"));
                 }
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeyReport, KeyCode.F11)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyReport, KeyCode.F11)))
                     Diagnostics.Report(true);
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeySpeedUp, KeyCode.PageUp)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeySpeedUp, KeyCode.PageUp)))
                     Cheats.NudgeSpeed(1);
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeySpeedDown, KeyCode.PageDown)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeySpeedDown, KeyCode.PageDown)))
                     Cheats.NudgeSpeed(-1);
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeySave, KeyCode.S)))
                 {
                     bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-                    if (!Settings.KeySaveNeedsCtrl.Value || ctrl) SaveNow();
+                    if ((!Settings.KeySaveNeedsCtrl.Value && !Settings.KeysNeedCtrl.Value) || ctrl)
+                        SaveNow();
                 }
 
-                if (Input.GetKeyDown(Settings.Key(Settings.KeySweepRoom, KeyCode.F7)))
+                if (mod && Input.GetKeyDown(Settings.Key(Settings.KeySweepRoom, KeyCode.F7)))
                 {
                     Transform p = null;
                     try { p = GameManager.GetPlayerTransform(); } catch (System.Exception) { }
