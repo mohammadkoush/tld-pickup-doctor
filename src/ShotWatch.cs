@@ -89,10 +89,20 @@ namespace LDPickupDoctor
                     // The attribution, stated as a fact and not as a conclusion: what the mod last
                     // did, and how long before the file appeared. A gap of many seconds means the mod
                     // had nothing to do with it.
+                    // NAMING THE COLLISION IS THE WHOLE POINT NOW.
+                    //
+                    // A mod cannot read the game's key bindings, so it cannot know in advance which
+                    // keys are safe - that was learned the expensive way, with F8, F9 and F10 all
+                    // turning out to be screenshot keys and 409 MB of PNGs to show for it. What it
+                    // CAN do is notice the symptom within two seconds and name the suspect, so the
+                    // next bad key costs one line in a log instead of an evening.
                     string blame = _lastActionAt < 0f
                         ? "this mod has done nothing at all this session - it is not us"
-                        : (since < 2.5f
-                            ? "the mod's last action was " + since.ToString("0.0") + "s before: " + _lastAction
+                        : (since < 1.5f
+                            ? "COLLISION: this happened " + since.ToString("0.0") + "s after "
+                              + _lastAction + ". That key is very likely one of the game's own "
+                              + "screenshot keys - rebind it in the Keys tab. The game binds F8, F9 "
+                              + "and F10 to screenshots and ignores modifiers on them."
                             : "the mod's last action was " + since.ToString("0.0")
                               + "s earlier (" + _lastAction + "), which is too long ago to be the cause");
 
