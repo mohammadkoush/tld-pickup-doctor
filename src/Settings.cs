@@ -109,6 +109,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> CheatCarryKG;
         public static MelonPreferences_Entry<bool> CheatUnlimitedAmmo;
         public static MelonPreferences_Entry<bool> CheatPerpetualFire;
+        public static MelonPreferences_Entry<bool> CheatNoRecoil;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -287,6 +288,12 @@ namespace LDPickupDoctor
             KeyToggleHighlight = _keys.CreateEntry("ToggleHighlight", "F8", description: "Outlines on or off.");
             KeyTogglePickup = _keys.CreateEntry("TogglePickup", "F9", description: "Auto pickup on or off.");
             KeyReport = _keys.CreateEntry("Report", "F11", description: "Write the diagnostic report to the log now.");
+            CheatNoRecoil = _cheats.CreateEntry("NoRecoil", false,
+                description: "Take the kick out of firearms. It zeroes the shooter's own recoil "
+                    + "vectors - the position and rotation kick applied on firing, and the dry-fire "
+                    + "kick - and puts every one of them back when switched off. Aim sway from cold "
+                    + "is a separate thing and is left alone.");
+
             RateCold = _cheats.CreateEntry("ColdRate", 1.0f,
                 description: "How fast you freeze, as a multiple of the game's own rate. 1.00 is off. "
                     + "It scales the per-degree freezing coefficient, so cold still bites harder the "

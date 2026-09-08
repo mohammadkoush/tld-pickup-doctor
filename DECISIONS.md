@@ -486,3 +486,26 @@ which counter moved.
 
 The lesson is the one this project keeps relearning: a counter that does not move is evidence, and
 `ammo(2 topups)` sitting still through a firefight said exactly where the fault was.
+
+---
+
+## 2026-09-08 - no recoil
+
+The kick lives on the shooter, not on the gun: `vp_FPSShooter.MotionPositionRecoil` and
+`MotionRotationRecoil` are the shove the weapon gets when it fires, and `MotionDryFireRecoil` is the
+one it gets on an empty chamber. Zeroing those three removes the recoil at its source, which means
+the camera recoil spring that follows it has nothing to follow - no second switch on the camera is
+needed, and no fighting between two systems.
+
+Every weapon carries its own shooter, so the pass walks them all once a second rather than assuming
+one exists, and each original vector is stored against its instance id and written back on the way
+out. If the switch is on and no shooter exists yet - which is simply what a weaponless scene looks
+like - it says so once and keeps looking.
+
+**Aim sway from cold is deliberately untouched.** `vp_FPSWeapon` has its own shake system with a
+`SetDisableAimShake` switch, but sway is not recoil and removing it was not what was asked for.
+It is one line away if it is ever wanted.
+
+Confirmed by testing this session: the fuel dial survives a reload, which is expected - the burn
+rates are prefab data rebuilt from the game's own values on load, and the mod re-applies the dial
+on the next sweep.

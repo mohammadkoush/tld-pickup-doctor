@@ -89,6 +89,13 @@ namespace LDPickupDoctor
         // ---- ammo --------------------------------------------------------------------------------
         private static int _ammoTopUps;
 
+        // ---- recoil ------------------------------------------------------------------------------
+        private static readonly Dictionary<int, Vector3> _origRecoilPos = new Dictionary<int, Vector3>();
+        private static readonly Dictionary<int, Vector3> _origRecoilRot = new Dictionary<int, Vector3>();
+        private static readonly Dictionary<int, float> _origDryFire = new Dictionary<int, float>();
+        private static int _recoilHeld;
+        private static float _nextRecoilScan;
+
         // ---- survival rates ----------------------------------------------------------------------
         // One stored original per field, keyed by a name rather than an instance id: these five are
         // singletons that live for the session, so a name is stable where an id is not.
@@ -115,6 +122,7 @@ namespace LDPickupDoctor
             if (Settings.CheatUnlimitedCarry.Value) s += " carry=" + Settings.CheatCarryKG.Value.ToString("0") + "kg";
             if (Settings.CheatUnlimitedAmmo.Value) s += " ammo(" + _ammoTopUps + " topups)";
             if (Settings.CheatPerpetualFire.Value) s += " perpetualFire(" + _fires.Count + ")";
+            if (Settings.CheatNoRecoil.Value) s += " noRecoil(" + _recoilHeld + ")";
             return s;
         }
 
@@ -125,6 +133,7 @@ namespace LDPickupDoctor
                 || Settings.CheatUnlimitedCarry.Value
                 || Settings.CheatUnlimitedAmmo.Value
                 || Settings.CheatPerpetualFire.Value
+                || Settings.CheatNoRecoil.Value
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
@@ -356,6 +365,7 @@ namespace LDPickupDoctor
             Rates();
             PlacedFuel();
             BuffTimers();
+            Recoil();
         }
 
         // ------------------------------------------------------------------------------------------
@@ -480,6 +490,104 @@ namespace LDPickupDoctor
                 return remaining;
             }
             return duration > remaining ? duration : remaining;
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // NO RECOIL
+        //
+        // The kick lives on the shooter, not on the gun: vp_FPSShooter carries MotionPositionRecoil
+        // and MotionRotationRecoil - the shove given to the weapon when it fires - plus a separate
+        // dry-fire kick. Zeroing those three removes the recoil at its source, so the camera spring
+        // that follows it has nothing to follow and no second switch is needed.
+        //
+        // Every weapon has its own shooter, so this walks them rather than assuming one, and stores
+        // each original vector against its instance id. Aim sway from cold is a different system and
+        // is deliberately left alone: it is not recoil, and taking it out was not asked for.
+        // ------------------------------------------------------------------------------------------
+        private static void Recoil()
+        {
+            if (!Settings.CheatNoRecoil.Value)
+            {
+                if (_origRecoilPos.Count > 0) RestoreRecoil();
+                return;
+            }
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextRecoilScan) return;
+            _nextRecoilScan = now + 1f;      // weapons are swapped by hand, not sixty times a second
+
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSShooter> shooters =
+                    Object.FindObjectsOfType<vp_FPSShooter>();
+                int held = 0;
+                for (int i = 0; i < shooters.Length; i++)
+                {
+                    vp_FPSShooter sh = shooters[i];
+                    if (sh == null) continue;
+                    int id = sh.GetInstanceID();
+
+                    if (!_origRecoilPos.ContainsKey(id))
+                    {
+                        _origRecoilPos[id] = sh.MotionPositionRecoil;
+                        _origRecoilRot[id] = sh.MotionRotationRecoil;
+                        _origDryFire[id] = sh.MotionDryFireRecoil;
+                        Log.OnceInfo("recoil-on", "no recoil on - the shooter's position and rotation "
+                            + "kick are zeroed, and put back when the switch goes off.");
+                    }
+
+                    sh.MotionPositionRecoil = Vector3.zero;
+                    sh.MotionRotationRecoil = Vector3.zero;
+                    sh.MotionDryFireRecoil = 0f;
+                    held++;
+                }
+                _recoilHeld = held;
+
+                if (held == 0)
+                {
+                    Log.OnceWarn("recoil-none", "no recoil is on but there is no vp_FPSShooter in the "
+                        + "scene yet - one appears with a weapon. It keeps looking every second.");
+                }
+                else
+                {
+                    Log.Forget("recoil-none");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("recoil-threw", "the recoil vectors could not be written: " + e.Message
+                    + " - retried every second, and the switch stays on.");
+            }
+        }
+
+        private static void RestoreRecoil()
+        {
+            int n = 0;
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSShooter> shooters =
+                    Object.FindObjectsOfType<vp_FPSShooter>();
+                for (int i = 0; i < shooters.Length; i++)
+                {
+                    vp_FPSShooter sh = shooters[i];
+                    if (sh == null) continue;
+                    int id = sh.GetInstanceID();
+                    Vector3 pos, rot;
+                    float dry;
+                    if (_origRecoilPos.TryGetValue(id, out pos)) { sh.MotionPositionRecoil = pos; n++; }
+                    if (_origRecoilRot.TryGetValue(id, out rot)) sh.MotionRotationRecoil = rot;
+                    if (_origDryFire.TryGetValue(id, out dry)) sh.MotionDryFireRecoil = dry;
+                }
+            }
+            catch (System.Exception) { }
+
+            int held = _origRecoilPos.Count;
+            _origRecoilPos.Clear();
+            _origRecoilRot.Clear();
+            _origDryFire.Clear();
+            _recoilHeld = 0;
+            _nextRecoilScan = 0f;
+            Log.Info("no recoil off - " + n + " of " + held + " weapon(s) got their kick back.");
         }
 
         /// <summary>Every timed buff and where its clock stands, for the window.</summary>

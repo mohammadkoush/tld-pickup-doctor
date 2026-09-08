@@ -163,6 +163,7 @@ outline colours across a map you have to walk.
 | Unlimited carrying weight | Raises `Encumber.m_MaxCarryCapacity` to `CarryKG`. | off |
 | Unlimited ammo | Keeps the clip of the gun **in your hands** full. Ammo in the pack is untouched. | off |
 | Perpetual fire | Sets the game's own `Fire.m_IsPerpetual`, the flag it uses for scripted fires. | off |
+| No recoil | Zeroes `vp_FPSShooter.MotionPositionRecoil`, `MotionRotationRecoil` and the dry-fire kick. | off |
 | Cold rate | Scales `Freezing.m_FreezingIncreasePerHourPerDegreeCelsius`. | `1.00` |
 | Tiredness rate | Scales every `Fatigue.m_FatigueIncreasePerHour*`. | `1.00` |
 | Thirst rate | Scales `Thirst.m_ThirstIncreasePerDay` awake and resting. | `1.00` |

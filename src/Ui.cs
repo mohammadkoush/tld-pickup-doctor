@@ -608,6 +608,7 @@ namespace LDPickupDoctor
             Slider(Settings.CheatCarryKG, 30f, 2000f, "What unlimited means (kg)");
             Toggle(Settings.CheatUnlimitedAmmo, "Unlimited ammo in the gun you hold");
             Toggle(Settings.CheatPerpetualFire, "Fires, stoves and fireplaces never go out");
+            Toggle(Settings.CheatNoRecoil, "No firearm recoil");
 
             GUILayout.Space(10f);
             GUI.color = new Color(0.75f, 0.85f, 0.95f);
