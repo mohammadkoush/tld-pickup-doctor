@@ -542,6 +542,16 @@ namespace LDPickupDoctor
                + "of these needs Ctrl held - which is what keeps them clear of the game's own "
                + "function keys.");
             Toggle(Settings.KeysNeedCtrl, "Every hotkey needs Ctrl held");
+            if (ShotWatch.LastCollisionKey.Length > 0)
+            {
+                GUI.color = new Color(1f, 0.72f, 0.35f);
+                GUILayout.Label("Caught this session: " + ShotWatch.LastCollisionKey
+                    + " coincided with a screenshot appearing on the desktop, so the game wants that "
+                    + "key too. Rebind it below.", _label);
+                GUI.color = Color.white;
+                GUILayout.Space(6f);
+            }
+
             Key(Settings.KeyWindow, "Open this window");
             Key(Settings.KeySweepRoom, "Sweep the room");
             Key(Settings.KeyToggleHighlight, "Outlines on or off");
@@ -934,6 +944,35 @@ namespace LDPickupDoctor
             t.SetPixels(px);
             t.Apply();
             return t;
+        }
+
+        /// <summary>
+        /// The collision banner. Drawn whether or not the window is open, because the moment worth
+        /// telling somebody about a bad hotkey is the moment they press it, not the next time they
+        /// happen to read a log file.
+        /// </summary>
+        public static void DrawCollisionBanner()
+        {
+            if (ShotWatch.CollisionText.Length == 0) return;
+            float age = Time.realtimeSinceStartup - ShotWatch.CollisionAt;
+            if (age > 15f) return;
+            EnsureSkin();
+
+            float w = Mathf.Min(760f, Screen.width - 40f);
+            float x = (Screen.width - w) * 0.5f;
+            Rect box = new Rect(x, 40f, w, 58f);
+
+            // Fades out over its last three seconds rather than vanishing, so it does not read as a
+            // flicker if it is caught out of the corner of an eye.
+            float alpha = age > 12f ? Mathf.Clamp01((15f - age) / 3f) : 1f;
+            Color was = GUI.color;
+
+            GUI.color = new Color(0f, 0f, 0f, 0.8f * alpha);
+            GUI.DrawTexture(box, _bg, ScaleMode.StretchToFill);
+            GUI.color = new Color(1f, 0.72f, 0.35f, alpha);
+            GUI.Label(new Rect(box.x + 12f, box.y + 8f, box.width - 24f, box.height - 16f),
+                "LD PICKUP DOCTOR - " + ShotWatch.CollisionText, _label);
+            GUI.color = was;
         }
 
         /// <summary>The name labels, drawn straight to the screen rather than into the window.</summary>

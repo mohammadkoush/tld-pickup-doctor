@@ -731,3 +731,23 @@ because changing a default does nothing to a config that already holds the old v
 **The rule this leaves behind:** before binding a hotkey in any game, find out what that game
 already does with it. A mod cannot see the other side of that bet, and the cost here was 409 MB and
 an hour of two people guessing.
+
+---
+
+## 2026-09-08 - the collision warning goes on the screen, not in a log
+
+A log line is no use to somebody who is playing. The moment worth telling them about a bad hotkey is
+the moment they press it, on the screen they are looking at.
+
+So when `ShotWatch` sees a new `screen_*.png` within a second and a half of one of the mod's own
+hotkeys, it now raises a banner across the top of the screen for fifteen seconds - fading over the
+last three so it does not read as a flicker - naming the key and saying to rebind it in the Keys
+tab. It draws whether or not the settings window is open, since the window is exactly what somebody
+would not have open at that moment.
+
+The Keys tab also carries a line for the rest of the session naming any key caught this way, so the
+warning is still there when they go looking for it rather than only when it appeared.
+
+This is the general shape of the answer to "a mod cannot read the game's key bindings": it cannot
+know which keys are safe in advance, but it can notice the symptom in two seconds and say so where
+it will be seen.

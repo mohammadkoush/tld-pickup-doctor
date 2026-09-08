@@ -42,6 +42,13 @@ namespace LDPickupDoctor
 
         public static int Seen;
 
+        // What the on-screen banner says, and when it was raised. A log line is no use to somebody
+        // who is playing: the whole point of catching a collision is to catch it at the moment it
+        // happens, on the screen being looked at.
+        public static string CollisionText = "";
+        public static float CollisionAt = -999f;
+        public static string LastCollisionKey = "";
+
         /// <summary>Called from anywhere the mod does something a game might react to.</summary>
         public static void Note(string what)
         {
@@ -105,6 +112,17 @@ namespace LDPickupDoctor
                               + "and F10 to screenshots and ignores modifiers on them."
                             : "the mod's last action was " + since.ToString("0.0")
                               + "s earlier (" + _lastAction + "), which is too long ago to be the cause");
+
+                    // ON SCREEN, not only in the log. A log line is no use to somebody who is
+                    // playing: the moment worth telling them about a bad hotkey is the moment they
+                    // press it, on the screen they are looking at.
+                    if (since < 1.5f && _lastActionAt >= 0f)
+                    {
+                        LastCollisionKey = _lastAction;
+                        CollisionAt = now;
+                        CollisionText = _lastAction + " is also one of the game's own screenshot keys "
+                            + "- it just wrote a PNG to your desktop. Rebind it in the Keys tab.";
+                    }
 
                     Log.Warn("screenshot watch: " + added + " new screen_*.png on the desktop ("
                         + files.Length + " total). " + blame);

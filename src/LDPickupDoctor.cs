@@ -137,6 +137,7 @@ namespace LDPickupDoctor
         public override void OnGUI()
         {
             if (!Settings.Enabled.Value) return;
+            Ui.DrawCollisionBanner();
             Ui.DrawLabels();
             Ui.Draw();
         }
