@@ -751,3 +751,31 @@ warning is still there when they go looking for it rather than only when it appe
 This is the general shape of the answer to "a mod cannot read the game's key bindings": it cannot
 know which keys are safe in advance, but it can notice the symptom in two seconds and say so where
 it will be seen.
+
+---
+
+## 2026-09-08 - the carry cheat was half a cheat
+
+Reported from play: the cap was at 500 kg, the pack held 66 kg, and the character was still being
+told to drop something and still moving like a loaded mule.
+
+Raising `Encumber.m_MaxCarryCapacity` bought the right to CARRY 500 kg and nothing else. The
+encumbrance system does not work in fractions of the cap - it holds its own absolute weights, and
+every one of them was left where it was:
+
+    m_EncumberLowThreshold / Med / High     when it complains, and how loudly
+    m_NoSprintCarryCapacity                 the weight at which sprinting stops
+    m_NoWalkCarryCapacity                   the weight at which walking stops
+    m_MaxCarryCapacityWhenExhausted         the tired cap
+
+`GetEncumbranceSlowdownMultiplier` reads those same numbers, so the slowdown was real and not
+imagined.
+
+All five are now scaled by **the same ratio as the cap** rather than flattened to it. That keeps the
+bands in proportion: a 500 kg cap moves the first complaint from about 30 kg to about 300 kg, and
+the encumbrance system still exists and still means something. Flattening them would have deleted
+encumbrance altogether, which is a different feature and nobody asked for it.
+
+Originals are stored per `Encumber` instance and written back when the cheat goes off, same
+discipline as the cap itself. The first capture logs all five of the game's own numbers, so the
+scaling can be checked rather than believed.

@@ -1456,6 +1456,7 @@ namespace LDPickupDoctor
                 if (_origCapacityById.TryGetValue(encId, out was))
                 {
                     try { enc.m_MaxCarryCapacity = was; } catch (System.Exception) { }
+                    RestoreEncumberBands(enc, encId);
                     _origCapacityById.Remove(encId);
                     _haveCapacity = false;
                     Log.Info("carry cheat off - cap back to " + Sweep.KG(was).ToString("0.0") + " kg.");
@@ -1477,12 +1478,103 @@ namespace LDPickupDoctor
                 // Written every sweep, not once: the game recomputes this from buffs, fatigue and
                 // clothing, so a single write would be overwritten within the minute.
                 enc.m_MaxCarryCapacity = want;
+
+                // AND THE FIVE OTHER WEIGHTS, WHICH IS WHAT THE FIRST VERSION MISSED.
+                //
+                // Raising the cap alone bought the right to CARRY 500 kg and nothing else. The
+                // encumbrance system does not work in fractions of the cap - it has its own absolute
+                // weights, and they were untouched:
+                //
+                //     m_EncumberLowThreshold / Med / High     when it complains, and how loudly
+                //     m_NoSprintCarryCapacity                 when sprinting stops
+                //     m_NoWalkCarryCapacity                   when walking stops
+                //     m_MaxCarryCapacityWhenExhausted         the tired cap
+                //
+                // So at 66 kg the pack was legal and the character was still past every band: told
+                // to drop something, and slowed down by GetEncumbranceSlowdownMultiplier which reads
+                // those same numbers. The cheat was half a cheat.
+                //
+                // They are scaled by the SAME RATIO as the cap rather than flattened to it, so the
+                // bands keep their shape - a 500 kg cap simply puts the first complaint around 300 kg
+                // instead of 30. Flattening them would have removed the encumbrance system entirely,
+                // which is a different feature nobody asked for.
+                ScaleEncumberBands(enc, encId, want);
             }
             catch (System.Exception e)
             {
                 Log.OnceWarn("carry-threw", "raising the carry cap threw: " + e.Message
                     + " - it is retried on the next sweep and the cheat stays on.");
             }
+        }
+
+        /// <summary>The five weights beside the cap, kept in the same proportion to it.</summary>
+        private struct EncumberBands
+        {
+            public ItemWeight Exhausted, NoSprint, NoWalk, Low, Med, High;
+        }
+
+        private static readonly Dictionary<int, EncumberBands> _origBands =
+            new Dictionary<int, EncumberBands>();
+
+        private static void ScaleEncumberBands(Encumber enc, int encId, ItemWeight newMax)
+        {
+            try
+            {
+                EncumberBands was;
+                if (!_origBands.TryGetValue(encId, out was))
+                {
+                    was.Exhausted = enc.m_MaxCarryCapacityWhenExhausted;
+                    was.NoSprint = enc.m_NoSprintCarryCapacity;
+                    was.NoWalk = enc.m_NoWalkCarryCapacity;
+                    was.Low = enc.m_EncumberLowThreshold;
+                    was.Med = enc.m_EncumberMedThreshold;
+                    was.High = enc.m_EncumberHighThreshold;
+                    _origBands[encId] = was;
+
+                    Log.Info("carry cheat: the game's encumbrance bands are low "
+                        + Sweep.KG(was.Low).ToString("0.0") + "kg, med "
+                        + Sweep.KG(was.Med).ToString("0.0") + "kg, high "
+                        + Sweep.KG(was.High).ToString("0.0") + "kg, no-sprint "
+                        + Sweep.KG(was.NoSprint).ToString("0.0") + "kg, no-walk "
+                        + Sweep.KG(was.NoWalk).ToString("0.0")
+                        + "kg. Raising the cap alone left every one of these where it was, which is "
+                        + "why the complaining and the slowdown carried on.");
+                }
+
+                float origMaxKg = Sweep.KG(_origCapacity);
+                if (origMaxKg <= 0.01f) return;              // no baseline to scale against
+                float ratio = Sweep.KG(newMax) / origMaxKg;
+
+                enc.m_MaxCarryCapacityWhenExhausted = was.Exhausted * ratio;
+                enc.m_NoSprintCarryCapacity = was.NoSprint * ratio;
+                enc.m_NoWalkCarryCapacity = was.NoWalk * ratio;
+                enc.m_EncumberLowThreshold = was.Low * ratio;
+                enc.m_EncumberMedThreshold = was.Med * ratio;
+                enc.m_EncumberHighThreshold = was.High * ratio;
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("bands-threw", "the encumbrance bands could not be scaled: " + e.Message
+                    + " - the cap is still raised, so the pack holds more, but the game may still "
+                    + "complain about the weight.");
+            }
+        }
+
+        private static void RestoreEncumberBands(Encumber enc, int encId)
+        {
+            EncumberBands was;
+            if (!_origBands.TryGetValue(encId, out was)) return;
+            try
+            {
+                enc.m_MaxCarryCapacityWhenExhausted = was.Exhausted;
+                enc.m_NoSprintCarryCapacity = was.NoSprint;
+                enc.m_NoWalkCarryCapacity = was.NoWalk;
+                enc.m_EncumberLowThreshold = was.Low;
+                enc.m_EncumberMedThreshold = was.Med;
+                enc.m_EncumberHighThreshold = was.High;
+            }
+            catch (System.Exception) { }
+            _origBands.Remove(encId);
         }
 
         // ------------------------------------------------------------------------------------------
