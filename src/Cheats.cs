@@ -105,7 +105,19 @@ namespace LDPickupDoctor
         private static int _swayHeld;
         private static float _nextSwayScan;
         private static bool _aimShakeWas;
+        private static bool _aimSwayWas;
         private static bool _haveAimShakeWas;
+        private static int _weaponsHeld;
+
+        private struct WeaponSway
+        {
+            public Vector3 Look, Strafe, Fall, Limits, Shake;
+            public Vector4 Bob;
+            public float Slope;
+        }
+
+        private static readonly Dictionary<int, WeaponSway> _origWeaponSway =
+            new Dictionary<int, WeaponSway>();
 
         // ---- survival rates ----------------------------------------------------------------------
         // One stored original per field, keyed by a name rather than an instance id: these five are
@@ -134,7 +146,9 @@ namespace LDPickupDoctor
             if (Settings.CheatUnlimitedAmmo.Value) s += " ammo(" + _ammoTopUps + " topups)";
             if (Settings.CheatPerpetualFire.Value) s += " perpetualFire(" + _fires.Count + ")";
             if (Settings.CheatNoRecoil.Value) s += " noRecoil(guns=" + _gunsHeld + " shooters=" + _recoilHeld + ")";
-            if (Settings.CheatNoSway.Value) s += " noSway(" + _swayHeld + ")";
+            if (!Mathf.Approximately(Settings.RateCuring.Value, 1f))
+                s += " curing=" + Settings.RateCuring.Value.ToString("0.00") + "x(" + CuringHeld + ")";
+            if (Settings.CheatNoSway.Value) s += " noSway(guns=" + _swayHeld + " weapons=" + _weaponsHeld + ")";
             return s;
         }
 
@@ -147,6 +161,7 @@ namespace LDPickupDoctor
                 || Settings.CheatPerpetualFire.Value
                 || Settings.CheatNoRecoil.Value
                 || Settings.CheatNoSway.Value
+                || !Mathf.Approximately(Settings.RateCuring.Value, 1f)
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
@@ -209,6 +224,10 @@ namespace LDPickupDoctor
         /// means asking the scene for every light source and none of them changes that fast.
         /// </summary>
         private static float _nextPlacedFuelScan;
+        private static float _nextFuelReport;
+        private static int _placedLamps, _placedTorches, _placedFlares, _lampsToppedUp;
+        private static string _placedCounts = "0/0/0/0";
+        private static string _lastLampReading = "";
 
         private static void PlacedFuel()
         {
@@ -217,7 +236,10 @@ namespace LDPickupDoctor
 
             float now = Time.realtimeSinceStartup;
             if (now < _nextPlacedFuelScan) return;
-            _nextPlacedFuelScan = now + 1f;
+            // Four times a second while infinite, because a top-up is only as good as its interval -
+            // once a second lets a lantern lose a second of fuel between passes, which is exactly
+            // what "still being consumed" looks like from the other side of the screen.
+            _nextPlacedFuelScan = now + (FuelIsInfinite ? 0.25f : 1f);
 
             float m = FuelMultiplier();
             try
@@ -225,6 +247,13 @@ namespace LDPickupDoctor
                 Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<KeroseneLampItem> lamps =
                     Object.FindObjectsOfType<KeroseneLampItem>();
                 for (int i = 0; i < lamps.Length; i++) ApplyLamp(lamps[i], m);
+                _placedLamps = lamps.Length;
+                if (lamps.Length > 0 && lamps[0] != null)
+                {
+                    _lastLampReading = Sweep.Litres(lamps[0].m_CurrentFuelLiters).ToString("0.000")
+                        + "L of " + Sweep.Litres(lamps[0].m_MaxFuel).ToString("0.000")
+                        + "L, burn " + Sweep.Litres(lamps[0].m_FuelBurnPerHour).ToString("0.000") + "L/h";
+                }
             }
             catch (System.Exception e) { FuelComplain("placed lamps", e); }
 
@@ -233,6 +262,7 @@ namespace LDPickupDoctor
                 Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<TorchItem> torches =
                     Object.FindObjectsOfType<TorchItem>();
                 for (int i = 0; i < torches.Length; i++) ApplyTorch(torches[i], m);
+                _placedTorches = torches.Length;
             }
             catch (System.Exception e) { FuelComplain("placed torches", e); }
 
@@ -241,6 +271,7 @@ namespace LDPickupDoctor
                 Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlareItem> flares =
                     Object.FindObjectsOfType<FlareItem>();
                 for (int i = 0; i < flares.Length; i++) ApplyFlare(flares[i], m);
+                _placedFlares = flares.Length;
             }
             catch (System.Exception e) { FuelComplain("placed flares", e); }
 
@@ -249,8 +280,19 @@ namespace LDPickupDoctor
                 Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlashlightItem> lights =
                     Object.FindObjectsOfType<FlashlightItem>();
                 for (int i = 0; i < lights.Length; i++) ApplyFlashlight(lights[i], m);
+                _placedCounts = _placedLamps + "/" + _placedTorches + "/" + _placedFlares + "/" + lights.Length;
             }
             catch (System.Exception e) { FuelComplain("placed flashlights", e); }
+
+            // MEASUREMENT, not reassurance. If a lantern is still draining, the next line says
+            // whether it was found at all and what its tank actually reads.
+            if (now >= _nextFuelReport)
+            {
+                _nextFuelReport = now + 20f;
+                Log.Info("fuel pass: lamps/torches/flares/lights = " + _placedCounts
+                    + ", top-ups this session = " + _lampsToppedUp
+                    + (_lastLampReading.Length > 0 ? ", nearest lamp " + _lastLampReading : ""));
+            }
         }
 
         private static float FuelMultiplier()
@@ -269,6 +311,12 @@ namespace LDPickupDoctor
         }
 
         // A RATE: multiply. Litres an hour goes up when the dial goes up. Infinite means zero.
+        //
+        // AND, WHEN INFINITE, THE TANK IS ALSO REFILLED. Zeroing the burn rate is an argument about
+        // what the game ought to do next; refilling the tank is a fact about what it currently holds.
+        // A placed lantern kept draining with the rate at zero, which says the burn is computed
+        // somewhere this cannot see - so infinite stops asking and simply tops the fuel up. It is the
+        // difference between telling the clock to stop and winding it.
         private static void ApplyLamp(KeroseneLampItem lamp, float m)
         {
             if (lamp == null) return;
@@ -277,6 +325,12 @@ namespace LDPickupDoctor
                 ? FuelHold(lamp.GetInstanceID(), litres, 0f)
                 : FuelScale(lamp.GetInstanceID(), litres, m);
             lamp.m_FuelBurnPerHour = ItemLiquidVolume.FromLiters(want);
+
+            if (FuelIsInfinite)
+            {
+                lamp.m_CurrentFuelLiters = lamp.m_MaxFuel;
+                _lampsToppedUp++;
+            }
         }
 
         // A LIFETIME: divide. More minutes of life is a slower drain. Infinite is a very large number
@@ -290,6 +344,9 @@ namespace LDPickupDoctor
             torch.m_BurnLifetimeMinutes = FuelIsInfinite
                 ? FuelHold(torch.GetInstanceID(), mins, Forever)
                 : FuelScale(torch.GetInstanceID(), mins, 1f / m);
+
+            // Wind the clock back rather than only lengthening it - see the note on the lamp.
+            if (FuelIsInfinite) torch.m_ElapsedBurnMinutes = 0f;
         }
 
         private static void ApplyFlare(FlareItem flare, float m)
@@ -299,6 +356,8 @@ namespace LDPickupDoctor
             flare.m_BurnLifetimeMinutes = FuelIsInfinite
                 ? FuelHold(flare.GetInstanceID(), mins, Forever)
                 : FuelScale(flare.GetInstanceID(), mins, 1f / m);
+
+            if (FuelIsInfinite) flare.m_ElapsedBurnMinutes = 0f;
         }
 
         private static void ApplyFlashlight(FlashlightItem light, float m)
@@ -311,6 +370,8 @@ namespace LDPickupDoctor
             light.m_HighBeamDuration = FuelIsInfinite
                 ? FuelHold(id * 2 + 1, light.m_HighBeamDuration, Forever)
                 : FuelScale(id * 2 + 1, light.m_HighBeamDuration, 1f / m);
+
+            if (FuelIsInfinite) light.m_CurrentBatteryCharge = 1f;
         }
 
         /// <summary>
@@ -380,6 +441,7 @@ namespace LDPickupDoctor
             BuffTimers();
             Recoil();
             Sway();
+            Curing();
         }
 
         // ------------------------------------------------------------------------------------------
@@ -668,15 +730,147 @@ namespace LDPickupDoctor
                 if (!_haveAimShakeWas)
                 {
                     _aimShakeWas = vp_FPSWeapon.IsAimShakeDisabled();
+                    _aimSwayWas = vp_FPSWeapon.IsAimSwayDisabled();
                     _haveAimShakeWas = true;
                 }
                 vp_FPSWeapon.SetDisableAimShake(true);
+                vp_FPSWeapon.SetDisableAimSway(true);
             }
             catch (System.Exception e)
             {
                 Log.OnceWarn("aimshake-threw", "the aim shake switch could not be set: " + e.Message
                     + " - the sway values are still zeroed.");
             }
+
+            // THE VISUAL HALF, which is a different thing again from where the shot goes.
+            //
+            // With the gun's sway zeroed the aim point stops drifting - that was confirmed by
+            // testing, and it is the half that decides whether a shot lands. The weapon MODEL kept
+            // wobbling, because that motion lives on vp_FPSWeapon and is pure presentation: look
+            // sway, strafe sway, fall and slope sway, the idle bob and the shake. Zeroed here so the
+            // sight sits still to look at as well as to shoot with.
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSWeapon> weapons =
+                    Object.FindObjectsOfType<vp_FPSWeapon>();
+                for (int i = 0; i < weapons.Length; i++)
+                {
+                    vp_FPSWeapon w = weapons[i];
+                    if (w == null) continue;
+                    int id = w.GetInstanceID();
+                    if (!_origWeaponSway.ContainsKey(id))
+                    {
+                        WeaponSway was = new WeaponSway();
+                        was.Look = w.RotationLookSway;
+                        was.Strafe = w.RotationStrafeSway;
+                        was.Fall = w.RotationFallSway;
+                        was.Slope = w.RotationSlopeSway;
+                        was.Limits = w.SwayLimits;
+                        was.Shake = w.ShakeAmplitude;
+                        was.Bob = w.BobAmplitude;
+                        _origWeaponSway[id] = was;
+                    }
+                    w.RotationLookSway = Vector3.zero;
+                    w.RotationStrafeSway = Vector3.zero;
+                    w.RotationFallSway = Vector3.zero;
+                    w.RotationSlopeSway = 0f;
+                    w.SwayLimits = Vector3.zero;
+                    w.ShakeAmplitude = Vector3.zero;
+                    w.BobAmplitude = Vector4.zero;
+                }
+                _weaponsHeld = weapons.Length;
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("weaponsway-threw", "the weapon's visual sway could not be zeroed: "
+                    + e.Message + " - the aim itself is still held steady.");
+            }
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // CURING SPEED
+        //
+        // Hides, guts and anything else that turns into something else over time go through
+        // EvolveItem: m_TimeToEvolveGameDays is how long it takes, and m_TimeSpentEvolvingGameHours
+        // is how far along it is. Scaling the first is a dial on how fast curing happens.
+        //
+        // Above 1.00 is faster, which is the direction anyone would expect from something called
+        // "curing speed" - so the time is DIVIDED by the dial rather than multiplied. That is the
+        // opposite of the fuel dial on purpose: fuel is named for how fast it drains, this is named
+        // for how fast the job finishes, and each reads correctly for what it is called.
+        // ------------------------------------------------------------------------------------------
+        private static readonly Dictionary<int, float> _origEvolveDays = new Dictionary<int, float>();
+        private static float _nextCuringScan;
+        public static int CuringHeld;
+
+        private static void Curing()
+        {
+            float dial = Mathf.Clamp(Settings.RateCuring.Value, 0.05f, 20f);
+            bool neutral = Mathf.Approximately(dial, 1f);
+
+            if (neutral)
+            {
+                if (_origEvolveDays.Count > 0) RestoreCuring();
+                return;
+            }
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextCuringScan) return;
+            _nextCuringScan = now + 1f;
+
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<EvolveItem> items =
+                    Object.FindObjectsOfType<EvolveItem>();
+                for (int i = 0; i < items.Length; i++)
+                {
+                    EvolveItem e = items[i];
+                    if (e == null) continue;
+                    int id = e.GetInstanceID();
+                    float baseline;
+                    if (!_origEvolveDays.TryGetValue(id, out baseline))
+                    {
+                        baseline = e.m_TimeToEvolveGameDays;
+                        _origEvolveDays[id] = baseline;
+                        Log.OnceInfo("curing-on", "curing speed on - the game's own time to cure is "
+                            + baseline.ToString("0.00") + " days for the first item seen, divided by "
+                            + "the dial from here.");
+                    }
+                    e.m_TimeToEvolveGameDays = baseline / dial;
+                }
+                CuringHeld = items.Length;
+            }
+            catch (System.Exception ex)
+            {
+                Log.OnceWarn("curing-threw", "the curing time could not be set: " + ex.Message
+                    + " - retried each second, and the dial stays where it was put.");
+            }
+        }
+
+        private static void RestoreCuring()
+        {
+            int n = 0;
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<EvolveItem> items =
+                    Object.FindObjectsOfType<EvolveItem>();
+                for (int i = 0; i < items.Length; i++)
+                {
+                    EvolveItem e = items[i];
+                    if (e == null) continue;
+                    float was;
+                    if (!_origEvolveDays.TryGetValue(e.GetInstanceID(), out was)) continue;
+                    e.m_TimeToEvolveGameDays = was;
+                    n++;
+                }
+            }
+            catch (System.Exception) { }
+
+            int held = _origEvolveDays.Count;
+            _origEvolveDays.Clear();
+            CuringHeld = 0;
+            _nextCuringScan = 0f;
+            Log.Info("curing speed back to normal - " + n + " of " + held + " item(s) restored.");
         }
 
         private static void RestoreSway()
@@ -702,9 +896,37 @@ namespace LDPickupDoctor
 
             if (_haveAimShakeWas)
             {
-                try { vp_FPSWeapon.SetDisableAimShake(_aimShakeWas); } catch (System.Exception) { }
+                try
+                {
+                    vp_FPSWeapon.SetDisableAimShake(_aimShakeWas);
+                    vp_FPSWeapon.SetDisableAimSway(_aimSwayWas);
+                }
+                catch (System.Exception) { }
                 _haveAimShakeWas = false;
             }
+
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSWeapon> weapons =
+                    Object.FindObjectsOfType<vp_FPSWeapon>();
+                for (int i = 0; i < weapons.Length; i++)
+                {
+                    vp_FPSWeapon w = weapons[i];
+                    if (w == null) continue;
+                    WeaponSway was;
+                    if (!_origWeaponSway.TryGetValue(w.GetInstanceID(), out was)) continue;
+                    w.RotationLookSway = was.Look;
+                    w.RotationStrafeSway = was.Strafe;
+                    w.RotationFallSway = was.Fall;
+                    w.RotationSlopeSway = was.Slope;
+                    w.SwayLimits = was.Limits;
+                    w.ShakeAmplitude = was.Shake;
+                    w.BobAmplitude = was.Bob;
+                }
+            }
+            catch (System.Exception) { }
+            _origWeaponSway.Clear();
+            _weaponsHeld = 0;
 
             int held = _origSway.Count;
             _origSway.Clear();

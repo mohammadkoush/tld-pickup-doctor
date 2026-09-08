@@ -111,6 +111,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> CheatPerpetualFire;
         public static MelonPreferences_Entry<bool> CheatNoRecoil;
         public static MelonPreferences_Entry<bool> CheatNoSway;
+        public static MelonPreferences_Entry<float> RateCuring;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -301,6 +302,13 @@ namespace LDPickupDoctor
                     + "gun's sway range and its build-up rate, and uses the game's own "
                     + "aim-shake switch for the shake that comes from cold. All of it is put "
                     + "back when switched off.");
+
+            RateCuring = _cheats.CreateEntry("CuringSpeed", 1.0f,
+                description: "How fast hides, guts and anything else that cures over time get "
+                    + "there. 1.00 is off, and ABOVE 1 is faster - the opposite direction to "
+                    + "the fuel dial, because this one is named for how quickly the job "
+                    + "finishes rather than how quickly something drains. Each item keeps its "
+                    + "own original time and gets it back when the dial returns to 1.00.");
 
             RateCold = _cheats.CreateEntry("ColdRate", 1.0f,
                 description: "How fast you freeze, as a multiple of the game's own rate. 1.00 is off. "

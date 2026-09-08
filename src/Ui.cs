@@ -622,6 +622,7 @@ namespace LDPickupDoctor
             Slider(Settings.RateThirst, 0f, 3f, "Thirst - how fast you dry out");
             Slider(Settings.RateHunger, 0f, 3f, "Food - how fast calories burn");
             Slider(Settings.RateStamina, 0f, 3f, "Stamina - how fast sprinting drains it");
+            Slider(Settings.RateCuring, 1f, 20f, "Curing speed - hides and guts (higher is faster)");
             Slider(Settings.RateHeldFuel, 0.05f, 3f, "Item fuel - lamp, torch, flare, battery");
             Toggle(Settings.FuelIncludesPlaced, "Fuel dial covers placed items too");
             GUILayout.BeginHorizontal();

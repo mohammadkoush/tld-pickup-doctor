@@ -545,3 +545,46 @@ independently - this session proved it by removing one and watching the other tw
 **A note on tooling:** `python - <<EOF` inside a compound Bash command hung this session and swallowed
 the write that should have gone here. Scripts go in a file written with the editor and are then run,
 which is the standing rule on this machine for a reason.
+
+---
+
+## 2026-09-08 - three reports, three different halves of the same lesson
+
+### Placed fuel: stop arguing with the burn rate, wind the clock instead
+
+The rate was zeroed and a placed lantern kept draining. Zeroing a rate is an argument about what
+the game ought to do next; refilling the tank is a fact about what it currently holds. So the
+infinite position now also tops up the live resource - `m_CurrentFuelLiters` back to `m_MaxFuel`,
+`m_ElapsedBurnMinutes` back to zero on torches and flares, the flashlight battery back to full - and
+the placed pass runs four times a second instead of once while infinite, because a top-up is only as
+good as its interval.
+
+A measurement went in beside it, and it answered the question on the first launch:
+
+    fuel pass: lamps/torches/flares/lights = 2/0/0/0, top-ups this session = 2,
+    nearest lamp 1.000L of 1.000L, burn 0.000L/h
+
+Two lamps found, tank full, burn rate zero. That line is worth more than any amount of reasoning
+about whether the code "should" work.
+
+### Sway and recoil were both already working - on the half that matters
+
+His words, and they are the whole diagnosis: *"Sway is happening in animation, but not in where I am
+pointing at."* Same for recoil - the shot goes straight, the weapon still kicks on screen.
+
+So the gun-side numbers were right. What remained is `vp_FPSWeapon`, which is pure presentation:
+look sway, strafe sway, fall and slope sway, the idle bob, the shake. Those are zeroed now too, and
+`SetDisableAimSway` is called alongside the shake switch that was already there.
+
+**The recoil animation is left alone, and that is a decision rather than an omission.** It is an
+animation clip played on firing, not a number - the same clip that cycles the bolt and ejects the
+case. Suppressing it would leave a rifle that fires without moving at all, which looks broken rather
+than steady. The aim is unaffected either way.
+
+### A curing speed dial
+
+`EvolveItem.m_TimeToEvolveGameDays` is how long a hide, a gut, or anything else that becomes
+something else takes to get there. The dial divides it, so **above 1.00 is faster** - the opposite
+direction to the fuel dial, deliberately: fuel is named for how fast something drains, curing is
+named for how fast a job finishes, and each reads correctly for what it is called. Each item keeps
+its own original time and gets it back at 1.00.
