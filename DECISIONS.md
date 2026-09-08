@@ -828,3 +828,24 @@ item in the inventory. So the three questions the repair screen asks are patched
 `GetNumMaterialsRequired`, `GetRequiredGearUnits` and `GetDurationMinutes` answer zero while the
 switch is on and return the game's own answers when it is off. The game does the repairing; only the
 price it quotes changes.
+
+---
+
+## 2026-09-08 - the red repair button was a second gate
+
+Zeroing the cost was not enough, and the reason is that the repair screen asks two different
+questions. It asks `Repairable` what a repair COSTS, and it asks ITSELF whether repairing is
+ALLOWED - and the second answer is what paints the button red. Both have to say yes.
+
+So three more patches, on `Panel_Inventory_Examine`:
+
+    CanRepair()                     -> true      the button's colour and its click
+    RepairHasRequiredTool()         -> true      the "you need a sewing kit" gate
+    ConsumeMaterialsUsedForRepair() -> skipped   nothing is taken from the pack
+
+`ConsumeMaterialsUsedForRepair` is a prefix returning false rather than a postfix, because the only
+honest way to spend nothing is for the original never to run.
+
+Six patches in total now, all gated on the switch: with free repair off they return exactly what the
+game returns, so the patches are inert rather than absent. That is what lets the switch be flipped
+without restarting.

@@ -37,34 +37,50 @@ namespace LDPickupDoctor
         {
             if (_patched) return;
 
+            // THE PRICE AND THE PERMISSION ARE TWO DIFFERENT GATES, which is why zeroing the cost was
+            // not enough on its own. The repair screen asks Repairable what it costs, and then asks
+            // ITSELF whether repairing is allowed - and that second answer is what paints the button
+            // red. Both have to say yes.
             int ok = 0;
-            ok += Patch(harmony, "GetNumMaterialsRequired", nameof(ZeroInt), 0);
-            ok += Patch(harmony, "GetRequiredGearUnits", nameof(ZeroInt), 1);
-            ok += Patch(harmony, "GetDurationMinutes", nameof(ZeroInt), 0);
+
+            // What it costs.
+            ok += PatchOn(harmony, typeof(Repairable), "GetNumMaterialsRequired", nameof(ZeroInt), 0, false);
+            ok += PatchOn(harmony, typeof(Repairable), "GetRequiredGearUnits", nameof(ZeroInt), 1, false);
+            ok += PatchOn(harmony, typeof(Repairable), "GetDurationMinutes", nameof(ZeroInt), 0, false);
+
+            // Whether it is allowed at all - the red button.
+            ok += PatchOn(harmony, typeof(Panel_Inventory_Examine), "CanRepair", nameof(TrueBool), 0, false);
+            ok += PatchOn(harmony, typeof(Panel_Inventory_Examine), "RepairHasRequiredTool", nameof(TrueBool), 0, false);
+
+            // And do not take the materials it decided were free. A prefix that returns false skips
+            // the original entirely, which is the only honest way to spend nothing.
+            ok += PatchOn(harmony, typeof(Panel_Inventory_Examine), "ConsumeMaterialsUsedForRepair",
+                nameof(SkipWhenFree), 0, true);
 
             _patched = true;
             Applied = ok;
 
-            if (ok == 3)
+            if (ok == 6)
             {
-                Log.Info("free repair is available - the three questions the repair screen asks about "
-                    + "cost and time are patched, and they only answer zero while the switch is on.");
+                Log.Info("free repair is available - cost, permission and consumption are all patched, "
+                    + "and every one of them answers normally while the switch is off.");
             }
             else
             {
                 // SAY SO RATHER THAN LEAVE A DEAD SWITCH. A cheat that silently cannot work is the
                 // exact failure this mod was written to refuse.
-                Log.Warn("free repair could only patch " + ok + " of its 3 methods, so the switch may "
-                    + "not do what it says. The method names on Repairable have probably moved.");
+                Log.Warn("free repair patched " + ok + " of its 6 methods, so the switch may not do "
+                    + "everything it says. Whichever names moved are named in the warnings above.");
             }
         }
 
-        private static int Patch(HarmonyLib.Harmony harmony, string method, string postfix, int argCount)
+        private static int PatchOn(HarmonyLib.Harmony harmony, System.Type type, string method,
+                                   string helper, int argCount, bool asPrefix)
         {
             try
             {
                 System.Reflection.MethodInfo target = null;
-                System.Reflection.MethodInfo[] all = typeof(Repairable).GetMethods();
+                System.Reflection.MethodInfo[] all = type.GetMethods();
                 for (int i = 0; i < all.Length; i++)
                 {
                     if (all[i].Name != method) continue;
@@ -74,19 +90,20 @@ namespace LDPickupDoctor
                 }
                 if (target == null)
                 {
-                    Log.Warn("free repair: Repairable." + method + " with " + argCount
-                        + " argument(s) was not found.");
+                    Log.Warn("free repair: " + type.Name + "." + method + " with " + argCount
+                        + " argument(s) was not found - that part of the switch will do nothing.");
                     return 0;
                 }
 
-                System.Reflection.MethodInfo post = typeof(FreeRepair).GetMethod(postfix,
+                System.Reflection.MethodInfo fn = typeof(FreeRepair).GetMethod(helper,
                     System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-                harmony.Patch(target, postfix: new HarmonyMethod(post));
+                if (asPrefix) harmony.Patch(target, prefix: new HarmonyMethod(fn));
+                else harmony.Patch(target, postfix: new HarmonyMethod(fn));
                 return 1;
             }
             catch (System.Exception e)
             {
-                Log.Warn("free repair: patching Repairable." + method + " threw: " + e.Message);
+                Log.Warn("free repair: patching " + type.Name + "." + method + " threw: " + e.Message);
                 return 0;
             }
         }
@@ -97,6 +114,20 @@ namespace LDPickupDoctor
             if (!Settings.CheatFreeRepair.Value) return;
             if (__result != 0) Uses++;
             __result = 0;
+        }
+
+        /// <summary>Say yes, but only while the switch is on. This is what un-reds the button.</summary>
+        private static void TrueBool(ref bool __result)
+        {
+            if (!Settings.CheatFreeRepair.Value) return;
+            if (!__result) Uses++;
+            __result = true;
+        }
+
+        /// <summary>Returning false skips the original, so nothing is taken from the pack.</summary>
+        private static bool SkipWhenFree()
+        {
+            return !Settings.CheatFreeRepair.Value;
         }
 
         public static int Uses;
