@@ -288,17 +288,28 @@ namespace LDPickupDoctor
                     + "m_IsPerpetual flag, the one it uses for scripted fires, and clears it again "
                     + "when you turn this off.");
 
-            KeysNeedCtrl = _keys.CreateEntry("NeedCtrl", true,
-                description: "Require Ctrl to be held with every hotkey here. ON by default, and "
-                    + "it is not fussiness: The Long Dark binds its own high-resolution "
-                    + "screenshot to a bare function key, so a mod hotkey that shares one drops "
-                    + "a ten megabyte PNG on the desktop every time it is pressed. A modifier "
-                    + "removes the whole class of collision rather than dodging one key.");
+            KeysNeedCtrl = _keys.CreateEntry("NeedCtrl", false,
+                description: "Require Ctrl to be held with every hotkey here. OFF by default now "
+                    + "that the defaults have moved off the game's screenshot keys - a modifier "
+                    + "was the first answer to that problem and it was the wrong one, because the "
+                    + "game does not check modifiers: Ctrl and F10 still takes its screenshot. "
+                    + "Kept as an option for anyone who rebinds onto a key the game also wants.");
 
-            KeyWindow = _keys.CreateEntry("Window", "F10", description: "Open and close the settings window.");
+            // NOT F8, F9 OR F10, EVER. Those three are The Long Dark's own screenshot keys -
+            // debug, normal, and high resolution with the HUD hidden - and every one of them
+            // writes a PNG to the desktop with no setting to redirect it. A mod sharing one of
+            // those keys quietly fills the desktop with ten megabyte files: it did, 52 of them
+            // in one evening, and the F10 window key was the worst of the three because it is
+            // the one pressed most.
+            KeyWindow = _keys.CreateEntry("Window", "Insert",
+                description: "Open and close the settings window. NOT on F10: that is the game's "
+                    + "own high-resolution screenshot key and it drops a PNG on the desktop every "
+                    + "time it is pressed.");
             KeySweepRoom = _keys.CreateEntry("SweepRoom", "F7", description: "Take everything eligible nearby, once.");
-            KeyToggleHighlight = _keys.CreateEntry("ToggleHighlight", "F8", description: "Outlines on or off.");
-            KeyTogglePickup = _keys.CreateEntry("TogglePickup", "F9", description: "Auto pickup on or off.");
+            KeyToggleHighlight = _keys.CreateEntry("ToggleHighlight", "Home",
+                description: "Outlines on or off. NOT on F8: that is the game's debug screenshot key.");
+            KeyTogglePickup = _keys.CreateEntry("TogglePickup", "End",
+                description: "Auto pickup on or off. NOT on F9: that is the game's screenshot key.");
             KeyReport = _keys.CreateEntry("Report", "F11", description: "Write the diagnostic report to the log now.");
             CheatNoRecoil = _cheats.CreateEntry("NoRecoil", false,
                 description: "Take the kick out of firearms. It zeroes the shooter's own recoil "

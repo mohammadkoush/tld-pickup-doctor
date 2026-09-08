@@ -690,3 +690,44 @@ including "this mod has done nothing at all this session, it is not us", which i
 would clear the mod entirely. It stops looking after a quiet hour and costs one directory listing.
 
 `Diagnostics.WatchDesktopScreenshots` turns it off.
+
+---
+
+## 2026-09-08 - the screenshots, finally established
+
+The cause, with every step now evidenced rather than inferred.
+
+**The Long Dark binds three of its own screenshot keys, and all three write to the desktop by
+design.** From the game's own community, found through Brave rather than by reading the binary:
+
+    F8    debug screenshot
+    F9    screenshot
+    F10   HIGH RESOLUTION screenshot with the HUD hidden  ->  screen_<guid>_hi.png
+
+There is no setting to redirect them. F12 is Steam's, and that one goes to Steam. Every one of the
+52 files carried the `_hi` suffix, which names F10 exactly - and F10 was the mod's settings window
+key, the key pressed most often in an evening of testing.
+
+**The visible tell was there all along**: pressing F10 makes the game flick from ultrawide to a
+different aspect for a fraction of a second and back. That is the high-resolution capture
+re-rendering the frame at a larger size before writing the PNG.
+
+**A modifier does not help, and that was tested rather than assumed.** The first fix required Ctrl
+with every hotkey. With that build installed, a bare F10 press produced no settings window - the mod
+correctly ignored it - and the game still took its screenshot. The game does not check modifiers.
+
+**So the defaults moved off those keys entirely:**
+
+    settings window   F10  ->  Insert
+    outlines          F8   ->  Home
+    auto pickup       F9   ->  End
+    sweep the room    F7        (unchanged - not a screenshot key)
+    report            F11       (unchanged - not a screenshot key)
+
+`Keys.NeedCtrl` stays as an option but defaults OFF now: it was the wrong answer to this problem and
+keeping it on would add friction for nothing. The existing `MelonPreferences.cfg` was rewritten too,
+because changing a default does nothing to a config that already holds the old value.
+
+**The rule this leaves behind:** before binding a hotkey in any game, find out what that game
+already does with it. A mod cannot see the other side of that bet, and the cost here was 409 MB and
+an hour of two people guessing.
