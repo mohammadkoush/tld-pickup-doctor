@@ -609,6 +609,7 @@ namespace LDPickupDoctor
             Toggle(Settings.CheatUnlimitedAmmo, "Unlimited ammo in the gun you hold");
             Toggle(Settings.CheatPerpetualFire, "Fires, stoves and fireplaces never go out");
             Toggle(Settings.CheatNoRecoil, "No firearm recoil");
+            Toggle(Settings.CheatNoSway, "No aim sway");
 
             GUILayout.Space(10f);
             GUI.color = new Color(0.75f, 0.85f, 0.95f);

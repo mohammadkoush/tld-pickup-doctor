@@ -110,6 +110,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> CheatUnlimitedAmmo;
         public static MelonPreferences_Entry<bool> CheatPerpetualFire;
         public static MelonPreferences_Entry<bool> CheatNoRecoil;
+        public static MelonPreferences_Entry<bool> CheatNoSway;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -293,6 +294,13 @@ namespace LDPickupDoctor
                     + "vectors - the position and rotation kick applied on firing, and the dry-fire "
                     + "kick - and puts every one of them back when switched off. Aim sway from cold "
                     + "is a separate thing and is left alone.");
+
+            CheatNoSway = _cheats.CreateEntry("NoSway", false,
+                description: "Hold the sight still. Sway is the wobble while aiming, driven "
+                    + "by fatigue, and it is a different system from recoil - this zeroes the "
+                    + "gun's sway range and its build-up rate, and uses the game's own "
+                    + "aim-shake switch for the shake that comes from cold. All of it is put "
+                    + "back when switched off.");
 
             RateCold = _cheats.CreateEntry("ColdRate", 1.0f,
                 description: "How fast you freeze, as a multiple of the game's own rate. 1.00 is off. "

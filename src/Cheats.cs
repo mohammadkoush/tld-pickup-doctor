@@ -94,7 +94,18 @@ namespace LDPickupDoctor
         private static readonly Dictionary<int, Vector3> _origRecoilRot = new Dictionary<int, Vector3>();
         private static readonly Dictionary<int, float> _origDryFire = new Dictionary<int, float>();
         private static int _recoilHeld;
+        private static int _gunsHeld;
         private static float _nextRecoilScan;
+        private static readonly Dictionary<int, Vector4> _origGunRecoil = new Dictionary<int, Vector4>();
+
+        // ---- sway --------------------------------------------------------------------------------
+        // Aim sway is a separate system from recoil: the wobble while holding a sight, driven by
+        // fatigue. GunItem keeps the two ends of that range plus how fast it builds.
+        private static readonly Dictionary<int, Vector3> _origSway = new Dictionary<int, Vector3>();
+        private static int _swayHeld;
+        private static float _nextSwayScan;
+        private static bool _aimShakeWas;
+        private static bool _haveAimShakeWas;
 
         // ---- survival rates ----------------------------------------------------------------------
         // One stored original per field, keyed by a name rather than an instance id: these five are
@@ -122,7 +133,8 @@ namespace LDPickupDoctor
             if (Settings.CheatUnlimitedCarry.Value) s += " carry=" + Settings.CheatCarryKG.Value.ToString("0") + "kg";
             if (Settings.CheatUnlimitedAmmo.Value) s += " ammo(" + _ammoTopUps + " topups)";
             if (Settings.CheatPerpetualFire.Value) s += " perpetualFire(" + _fires.Count + ")";
-            if (Settings.CheatNoRecoil.Value) s += " noRecoil(" + _recoilHeld + ")";
+            if (Settings.CheatNoRecoil.Value) s += " noRecoil(guns=" + _gunsHeld + " shooters=" + _recoilHeld + ")";
+            if (Settings.CheatNoSway.Value) s += " noSway(" + _swayHeld + ")";
             return s;
         }
 
@@ -134,6 +146,7 @@ namespace LDPickupDoctor
                 || Settings.CheatUnlimitedAmmo.Value
                 || Settings.CheatPerpetualFire.Value
                 || Settings.CheatNoRecoil.Value
+                || Settings.CheatNoSway.Value
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
@@ -366,6 +379,7 @@ namespace LDPickupDoctor
             PlacedFuel();
             BuffTimers();
             Recoil();
+            Sway();
         }
 
         // ------------------------------------------------------------------------------------------
@@ -508,13 +522,51 @@ namespace LDPickupDoctor
         {
             if (!Settings.CheatNoRecoil.Value)
             {
-                if (_origRecoilPos.Count > 0) RestoreRecoil();
+                if (_origRecoilPos.Count > 0 || _origGunRecoil.Count > 0) RestoreRecoil();
                 return;
             }
 
             float now = Time.realtimeSinceStartup;
             if (now < _nextRecoilScan) return;
             _nextRecoilScan = now + 1f;      // weapons are swapped by hand, not sixty times a second
+
+            // THE ACTUAL RECOIL LIVES ON THE GUN, and the first build missed it entirely.
+            //
+            // The log was clear that the code ran and found its target - noRecoil(1) - and the rifle
+            // kicked anyway. So the shooter's motion vectors are not what this game uses. GunItem
+            // carries its own four numbers, and those are the ones:
+            //
+            //     m_PitchRecoilMin / m_PitchRecoilMax     the upward kick, randomised between them
+            //     m_YawRecoilMin   / m_YawRecoilMax       the sideways one
+            //
+            // The shooter is still zeroed below, because it costs nothing and covers any weapon that
+            // does go through the UFPS path. But this is the pass that does the work.
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =
+                    Object.FindObjectsOfType<GunItem>();
+                for (int i = 0; i < guns.Length; i++)
+                {
+                    GunItem g = guns[i];
+                    if (g == null) continue;
+                    int id = g.GetInstanceID();
+                    if (!_origGunRecoil.ContainsKey(id))
+                    {
+                        _origGunRecoil[id] = new Vector4(g.m_PitchRecoilMin, g.m_PitchRecoilMax,
+                                                         g.m_YawRecoilMin, g.m_YawRecoilMax);
+                        Log.OnceInfo("gun-recoil", "no recoil on - the gun's own pitch and yaw kick "
+                            + "are zeroed. That is where this game keeps recoil; the shooter's motion "
+                            + "vectors are zeroed too, but they were never the ones doing it.");
+                    }
+                    g.m_PitchRecoilMin = 0f;
+                    g.m_PitchRecoilMax = 0f;
+                    g.m_YawRecoilMin = 0f;
+                    g.m_YawRecoilMax = 0f;
+                }
+                _gunsHeld = guns.Length;
+            }
+            catch (System.Exception e) { Log.OnceWarn("gun-recoil-threw",
+                "the gun's recoil values could not be written: " + e.Message + " - retried each second."); }
 
             try
             {
@@ -560,6 +612,107 @@ namespace LDPickupDoctor
             }
         }
 
+        // ------------------------------------------------------------------------------------------
+        // NO SWAY
+        //
+        // A different system from recoil and worth its own switch. Sway is the wobble while holding
+        // a sight, and GunItem keeps it as a range between the value at zero fatigue and the value
+        // at maximum, plus how fast it builds. Zeroing all three holds the sight still.
+        //
+        // The cold shake is a third thing again, and the game already has a switch for it, so this
+        // uses that rather than inventing one - and remembers what it was.
+        // ------------------------------------------------------------------------------------------
+        private static void Sway()
+        {
+            if (!Settings.CheatNoSway.Value)
+            {
+                if (_origSway.Count > 0 || _haveAimShakeWas) RestoreSway();
+                return;
+            }
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextSwayScan) return;
+            _nextSwayScan = now + 1f;
+
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =
+                    Object.FindObjectsOfType<GunItem>();
+                for (int i = 0; i < guns.Length; i++)
+                {
+                    GunItem g = guns[i];
+                    if (g == null) continue;
+                    int id = g.GetInstanceID();
+                    if (!_origSway.ContainsKey(id))
+                    {
+                        _origSway[id] = new Vector3(g.m_SwayValueZeroFatigue, g.m_SwayValueMaxFatigue,
+                                                    g.m_SwayIncreasePerSecond);
+                        Log.OnceInfo("sway-on", "no sway on - the gun's sway range and its build-up "
+                            + "rate are zeroed, and the game's own aim-shake switch is used for the "
+                            + "shake that comes from cold.");
+                    }
+                    g.m_SwayValueZeroFatigue = 0f;
+                    g.m_SwayValueMaxFatigue = 0f;
+                    g.m_SwayIncreasePerSecond = 0f;
+                }
+                _swayHeld = guns.Length;
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("sway-threw", "the sway values could not be written: " + e.Message
+                    + " - retried each second.");
+            }
+
+            try
+            {
+                if (!_haveAimShakeWas)
+                {
+                    _aimShakeWas = vp_FPSWeapon.IsAimShakeDisabled();
+                    _haveAimShakeWas = true;
+                }
+                vp_FPSWeapon.SetDisableAimShake(true);
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("aimshake-threw", "the aim shake switch could not be set: " + e.Message
+                    + " - the sway values are still zeroed.");
+            }
+        }
+
+        private static void RestoreSway()
+        {
+            int n = 0;
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =
+                    Object.FindObjectsOfType<GunItem>();
+                for (int i = 0; i < guns.Length; i++)
+                {
+                    GunItem g = guns[i];
+                    if (g == null) continue;
+                    Vector3 v;
+                    if (!_origSway.TryGetValue(g.GetInstanceID(), out v)) continue;
+                    g.m_SwayValueZeroFatigue = v.x;
+                    g.m_SwayValueMaxFatigue = v.y;
+                    g.m_SwayIncreasePerSecond = v.z;
+                    n++;
+                }
+            }
+            catch (System.Exception) { }
+
+            if (_haveAimShakeWas)
+            {
+                try { vp_FPSWeapon.SetDisableAimShake(_aimShakeWas); } catch (System.Exception) { }
+                _haveAimShakeWas = false;
+            }
+
+            int held = _origSway.Count;
+            _origSway.Clear();
+            _swayHeld = 0;
+            _nextSwayScan = 0f;
+            Log.Info("no sway off - " + n + " of " + held + " gun(s) got their sway back.");
+        }
+
         private static void RestoreRecoil()
         {
             int n = 0;
@@ -581,13 +734,37 @@ namespace LDPickupDoctor
             }
             catch (System.Exception) { }
 
+            int guns = 0;
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> gs =
+                    Object.FindObjectsOfType<GunItem>();
+                for (int i = 0; i < gs.Length; i++)
+                {
+                    GunItem g = gs[i];
+                    if (g == null) continue;
+                    Vector4 v;
+                    if (!_origGunRecoil.TryGetValue(g.GetInstanceID(), out v)) continue;
+                    g.m_PitchRecoilMin = v.x;
+                    g.m_PitchRecoilMax = v.y;
+                    g.m_YawRecoilMin = v.z;
+                    g.m_YawRecoilMax = v.w;
+                    guns++;
+                }
+            }
+            catch (System.Exception) { }
+
             int held = _origRecoilPos.Count;
+            int gunsHeld = _origGunRecoil.Count;
             _origRecoilPos.Clear();
             _origRecoilRot.Clear();
             _origDryFire.Clear();
+            _origGunRecoil.Clear();
             _recoilHeld = 0;
+            _gunsHeld = 0;
             _nextRecoilScan = 0f;
-            Log.Info("no recoil off - " + n + " of " + held + " weapon(s) got their kick back.");
+            Log.Info("no recoil off - " + guns + " of " + gunsHeld + " gun(s) and " + n + " of "
+                + held + " shooter(s) got their kick back.");
         }
 
         /// <summary>Every timed buff and where its clock stands, for the window.</summary>
