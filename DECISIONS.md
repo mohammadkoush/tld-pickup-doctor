@@ -900,3 +900,26 @@ Also his idea, and it is a measuring instrument rather than a crosshair: a dot a
 the screen cannot move, so anything that does move is the weapon or the camera. "Is it still
 swaying" stops being a matter of impression, which is the same reason every other number in this mod
 gets printed rather than felt.
+
+---
+
+## 2026-09-08 - two from testing: a black dot and a grace period that never started
+
+**The centre dot came out black whatever colour it asked for.** It was drawing `_bg` and `_stripBg`
+- the window background and its footer strip - and both of those are dark solids. `GUI.color`
+MULTIPLIES a texture, and anything times near-black is near-black. It has its own white texture now
+and is transparent lime: a soft halo and a brighter core, both the same hue so it never reads as two
+marks.
+
+**The drop grace period never started, and the bug is one line of ordering.** `Sweep.Run` judged the
+item and recorded its landing time afterwards:
+
+    f.Outcome = Judge(gi, f.Name);     <- decides "take it"
+    NoteOnGround(gi);                  <- starts the clock, too late
+
+So on the very first sweep after something was put down there was no landing time to compare
+against, the grace was zero, and it was taken on the spot. Every sweep after that would have refused
+it correctly - which is the cruellest shape of bug, because the mechanism works perfectly and never
+gets a turn. One sweep is 250ms and that is all the window a race like this needs.
+
+`NoteOnGround` now runs before `Judge`, with a comment saying why the order is the feature.

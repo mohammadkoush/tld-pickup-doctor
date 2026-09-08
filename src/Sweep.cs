@@ -187,9 +187,17 @@ namespace LDPickupDoctor
                     f.Where = gi.transform;
                     f.Distance = Vector3.Distance(origin, gi.transform.position);
                     f.Name = NameOf(gi);
+
+                    // NOTED BEFORE IT IS JUDGED, AND THE ORDER IS THE WHOLE FEATURE.
+                    //
+                    // The first version judged first and recorded afterwards, so on the very first
+                    // sweep after an item was put down there was no landing time to compare against
+                    // - the grace period had not started yet - and it was taken on the spot. One
+                    // sweep is 250ms, which is all the window a race like that needs.
+                    NoteOnGround(gi);
+
                     f.Outcome = Judge(gi, f.Name);
                     Remember(f.Name, gi);
-                    NoteOnGround(gi);
                     if (!Contains(Items, gi)) Items.Add(f);
                     continue;
                 }

@@ -56,7 +56,7 @@ namespace LDPickupDoctor
         private static MelonPreferences_Entry<string> _rebinding;
 
         private static GUIStyle _panel, _head, _foot, _label, _mono;
-        private static Texture2D _bg, _stripBg;
+        private static Texture2D _bg, _stripBg, _dot;
         private static bool _skinReady;
 
         // Cursor state we took, so it can be handed back exactly as it was.
@@ -1022,15 +1022,23 @@ namespace LDPickupDoctor
         {
             if (!Settings.CheatCentreDot.Value) return;
             EnsureSkin();
+
+            // A WHITE TEXTURE, WHICH IS THE WHOLE FIX. The first version tinted _bg and _stripBg -
+            // the window background and its footer strip - and both of those are dark solids, so the
+            // dot came out black whatever colour was asked for. GUI.color MULTIPLIES the texture, and
+            // anything times near-black is near-black.
+            if (_dot == null) _dot = Solid(Color.white);
+
             float x = Screen.width * 0.5f;
             float y = Screen.height * 0.5f;
             Color was = GUI.color;
-            // A dark square behind a bright core, so it reads against snow and against a dark cabin
-            // without needing a texture or an asset bundle.
-            GUI.color = new Color(0f, 0f, 0f, 0.85f);
-            GUI.DrawTexture(new Rect(x - 3f, y - 3f, 6f, 6f), _bg, ScaleMode.StretchToFill);
-            GUI.color = new Color(1f, 0.95f, 0.4f, 0.95f);
-            GUI.DrawTexture(new Rect(x - 1f, y - 1f, 2f, 2f), _stripBg, ScaleMode.StretchToFill);
+
+            // Transparent lime, with a darker halo of the same colour behind it so it still reads
+            // against snow. Both are the same hue, so it never looks like two marks.
+            GUI.color = new Color(0.4f, 1f, 0.2f, 0.25f);
+            GUI.DrawTexture(new Rect(x - 3f, y - 3f, 6f, 6f), _dot, ScaleMode.StretchToFill);
+            GUI.color = new Color(0.5f, 1f, 0.15f, 0.65f);
+            GUI.DrawTexture(new Rect(x - 1.5f, y - 1.5f, 3f, 3f), _dot, ScaleMode.StretchToFill);
             GUI.color = was;
         }
 
