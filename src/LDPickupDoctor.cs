@@ -34,6 +34,7 @@ namespace LDPickupDoctor
         private float _nextSweep;
         private bool _worldReady;
         private int _sceneStamp;
+        private float _lastWorldLog;
 
         public override void OnInitializeMelon()
         {
@@ -83,9 +84,17 @@ namespace LDPickupDoctor
             {
                 _worldReady = true;
                 Log.Forget("left-world");
-                Log.Info("world " + _sceneStamp + " is live - sweeping every "
-                    + Settings.ScanIntervalSeconds.Value.ToString("0.00") + "s within "
-                    + Settings.ScanRadius.Value.ToString("0") + "m.");
+                // RATE LIMITED, because the first run wrote this seven times in three minutes.
+                // The Long Dark initialises a scene for every interior, cave mouth and transition,
+                // and a line per transition turns the one line that matters into scrollback.
+                float since = Time.realtimeSinceStartup - _lastWorldLog;
+                if (since > 120f || _lastWorldLog == 0f)
+                {
+                    _lastWorldLog = Time.realtimeSinceStartup;
+                    Log.Info("world is live - sweeping every "
+                        + Settings.ScanIntervalSeconds.Value.ToString("0.00") + "s within "
+                        + Settings.ScanRadius.Value.ToString("0") + "m.");
+                }
             }
 
             float now = Time.realtimeSinceStartup;
@@ -115,6 +124,59 @@ namespace LDPickupDoctor
             Ui.Draw();
         }
 
+        private float _lastSave;
+
+        /// <summary>
+        /// Save where you stand, through the game's own save so the "game saved" message and the
+        /// slot handling are the game's rather than ours.
+        ///
+        /// EVERY REFUSAL SAYS WHY, same rule as pickup. A save key that sometimes does nothing and
+        /// never explains is worse than no save key: you stop trusting it and save by sleeping
+        /// anyway, which is the chore this was meant to remove.
+        /// </summary>
+        private void SaveNow()
+        {
+            float now = Time.realtimeSinceStartup;
+            float cooldown = Mathf.Max(1f, Settings.SaveCooldownSeconds.Value);
+            if (now - _lastSave < cooldown)
+            {
+                Log.Info("save key: " + (cooldown - (now - _lastSave)).ToString("0.0")
+                    + "s left on the cooldown.");
+                return;
+            }
+
+            try
+            {
+                if (GameManager.IsMainMenuActive() || GameManager.GetPlayerTransform() == null)
+                {
+                    Log.Info("save key: not in a world.");
+                    return;
+                }
+                if (GameManager.SaveIsBlockedDueToRestoreGame())
+                {
+                    Log.Info("save key: the game is blocking saves right now (a restore is in flight).");
+                    return;
+                }
+                if (SaveGameSystem.IsAsyncSaveRunning())
+                {
+                    Log.Info("save key: a save is already running.");
+                    return;
+                }
+
+                GameManager.SaveGameAndDisplayHUDMessage();
+                _lastSave = now;
+                Log.Info("save key: saved.");
+            }
+            catch (System.Exception e)
+            {
+                // The intent is never cleared here: the cooldown is NOT stamped on failure, so the
+                // next press tries again immediately rather than being told to wait for a save that
+                // never happened.
+                Log.OnceWarn("save-threw", "the save key threw: " + e.Message
+                    + " - the key still works and will try again on the next press.");
+            }
+        }
+
         private void Hotkeys()
         {
             try
@@ -139,6 +201,12 @@ namespace LDPickupDoctor
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeyReport, KeyCode.F11)))
                     Diagnostics.Report(true);
+
+                if (Input.GetKeyDown(Settings.Key(Settings.KeySave, KeyCode.S)))
+                {
+                    bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+                    if (!Settings.KeySaveNeedsCtrl.Value || ctrl) SaveNow();
+                }
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeySweepRoom, KeyCode.F7)))
                 {

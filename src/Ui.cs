@@ -104,7 +104,65 @@ namespace LDPickupDoctor
                 return;
             }
 
-            _rect = GUI.Window(0x1D9D, _rect, (GUI.WindowFunction)Body, "");
+            // NO GUI.Window HERE, AND THAT IS THE FIX FOR THE FIRST BUG THIS WINDOW HAD.
+            //
+            // GUI.Window takes a GUI.WindowFunction, which under IL2CPP is a generated Il2Cpp
+            // delegate rather than a managed one. The cast compiled, the call did not throw, and the
+            // body simply never ran - so the window opened, drew its frame, and was EMPTY. Nothing in
+            // the log, because nothing failed; the callback was just never invoked.
+            //
+            // A panel drawn with BeginArea needs no delegate at all, so the whole class of problem is
+            // gone rather than worked around. The cost is that dragging has to be done by hand, which
+            // is the ten lines below.
+            Drag();
+
+            GUI.DrawTexture(_rect, _bg, ScaleMode.StretchToFill);
+            GUI.DrawTexture(new Rect(_rect.x, _rect.y, _rect.width, 2f), _stripBg, ScaleMode.StretchToFill);
+
+            GUILayout.BeginArea(new Rect(_rect.x + 12f, _rect.y + 10f, _rect.width - 24f, _rect.height - 20f));
+            Body(0);
+            GUILayout.EndArea();
+
+            // Say it once, out loud: the body ran and how much it drew. A window that is blank again
+            // one day is then a question the log has already answered.
+            if (Event.current != null && Event.current.type == EventType.Repaint && !_saidDrawn)
+            {
+                _saidDrawn = true;
+                Log.Info("settings window drawn (" + Tabs.Length + " tabs, tab '" + Tabs[_tab] + "').");
+            }
+        }
+
+        private static bool _saidDrawn;
+        private static bool _dragging;
+        private static Vector2 _dragFrom;
+
+        /// <summary>Drag by the title strip, done by hand because there is no window to do it for us.</summary>
+        private static void Drag()
+        {
+            Event e = Event.current;
+            if (e == null) return;
+            Rect bar = new Rect(_rect.x, _rect.y, _rect.width, 26f);
+
+            if (e.type == EventType.MouseDown && e.button == 0 && bar.Contains(e.mousePosition))
+            {
+                _dragging = true;
+                _dragFrom = e.mousePosition - new Vector2(_rect.x, _rect.y);
+                e.Use();
+            }
+            else if (e.type == EventType.MouseDrag && _dragging)
+            {
+                _rect.x = e.mousePosition.x - _dragFrom.x;
+                _rect.y = e.mousePosition.y - _dragFrom.y;
+                // Never let it leave the screen entirely - a window he cannot reach is a window gone.
+                _rect.x = Mathf.Clamp(_rect.x, -_rect.width + 80f, Screen.width - 80f);
+                _rect.y = Mathf.Clamp(_rect.y, 0f, Screen.height - 40f);
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp && _dragging)
+            {
+                _dragging = false;
+                e.Use();
+            }
         }
 
         private static void Body(int id)
@@ -278,6 +336,9 @@ namespace LDPickupDoctor
             Key(Settings.KeyToggleHighlight, "Outlines on or off");
             Key(Settings.KeyTogglePickup, "Auto pickup on or off");
             Key(Settings.KeyReport, "Write the report to the log");
+            Key(Settings.KeySave, "Save the game");
+            Toggle(Settings.KeySaveNeedsCtrl, "Save key needs Ctrl held");
+            Slider(Settings.SaveCooldownSeconds, 1f, 60f, "Least seconds between saves");
         }
 
         private static void AdvancedTab()
@@ -480,7 +541,9 @@ namespace LDPickupDoctor
             _foot.normal.textColor = new Color(0.85f, 0.89f, 0.93f);
             _foot.padding = new RectOffset(8, 8, 6, 6);
 
-            GUI.skin.window.normal.background = _bg;
+            // The game's own GUI.skin is NOT written to. An earlier version set
+            // GUI.skin.window.normal.background here, which is a global the whole process shares -
+            // one mod tinting it black is how every other IMGUI window in the game turns black.
             _skinReady = true;
         }
 

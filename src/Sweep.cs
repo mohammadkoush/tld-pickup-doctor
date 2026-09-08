@@ -255,20 +255,26 @@ namespace LDPickupDoctor
             if (gi.m_InsideContainer) return Outcome.InsideContainer;
             if (gi.m_IsHidden) return Outcome.Hidden;
 
-            bool canInteract;
-            try { canInteract = gi.CanInteract; } catch (System.Exception) { canInteract = true; }
-            if (!canInteract) return Outcome.CannotInteract;
-
-            try { if (gi.IsAttachedToPlacePoint()) return Outcome.AttachedElsewhere; }
-            catch (System.Exception) { }
-
             if (Settings.PickupSkipRuined.Value)
             {
                 try { if (gi.m_CurrentHP <= 0f) return Outcome.Ruined; }
                 catch (System.Exception) { }
             }
 
+            // NAME BEFORE STATE, and the first log is why. The first in-world run reported
+            // CannotInteract=2259 against Success=3 in one minute, which reads as a mod that is
+            // being refused constantly - and it was nothing of the kind. Those were fixtures and
+            // props on the gear layer that he never asked for, being state-checked before anyone
+            // asked whether he wanted them. Asking "is this one of his?" first makes the tally a
+            // report about items he actually listed, which is the only thing the tally is for.
             if (!Matches(name, gi)) return Outcome.NotTargetName;
+
+            bool canInteract;
+            try { canInteract = gi.CanInteract; } catch (System.Exception) { canInteract = true; }
+            if (!canInteract) return Outcome.CannotInteract;
+
+            try { if (gi.IsAttachedToPlacePoint()) return Outcome.AttachedElsewhere; }
+            catch (System.Exception) { }
 
             if (Settings.PickupRespectWeight.Value && !WeightAllows(gi)) return Outcome.TooHeavy;
 

@@ -96,6 +96,9 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<string> KeyToggleHighlight;
         public static MelonPreferences_Entry<string> KeyTogglePickup;
         public static MelonPreferences_Entry<string> KeyReport;
+        public static MelonPreferences_Entry<string> KeySave;
+        public static MelonPreferences_Entry<bool> KeySaveNeedsCtrl;
+        public static MelonPreferences_Entry<float> SaveCooldownSeconds;
 
         // ---- interface -------------------------------------------------------------------------
         public static MelonPreferences_Entry<float> WindowOpacity;
@@ -217,6 +220,16 @@ namespace LDPickupDoctor
             KeyToggleHighlight = _keys.CreateEntry("ToggleHighlight", "F8", description: "Outlines on or off.");
             KeyTogglePickup = _keys.CreateEntry("TogglePickup", "F9", description: "Auto pickup on or off.");
             KeyReport = _keys.CreateEntry("Report", "F11", description: "Write the diagnostic report to the log now.");
+            KeySave = _keys.CreateEntry("SaveGame", "S",
+                description: "Save the game where you stand, with the game's own save and its own "
+                    + "'game saved' message. This is not a cheat - it is the same save the game makes "
+                    + "when you sleep or pass a trigger, taken at a moment you chose.");
+            KeySaveNeedsCtrl = _keys.CreateEntry("SaveNeedsCtrl", true,
+                description: "Require Ctrl to be held with the save key. On by default because S "
+                    + "alone is a movement key, and an unmodified S would save on every step back.");
+            SaveCooldownSeconds = _keys.CreateEntry("SaveCooldownSeconds", 5f,
+                description: "Least time between two saves from the key. A save writes to disk and "
+                    + "stutters, so holding the key must not queue a hundred of them.");
 
             WindowOpacity = _iface.CreateEntry("Opacity", 0.94f, description: "Settings window background opacity.");
             TooltipDelaySeconds = _iface.CreateEntry("TooltipDelaySeconds", 2f,
