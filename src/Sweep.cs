@@ -63,9 +63,24 @@ namespace LDPickupDoctor
         public static float LastSweepMs;
         public static int SweepCount;
 
-        /// Names seen at least once this session, for the Items tab of the window. Kept small by
-        /// being a set of item names rather than a list of instances.
+        /// <summary>
+        /// Names seen this session, and HOW MANY DISTINCT ITEMS of each - not how many times the
+        /// sweep looked at one.
+        ///
+        /// The first version counted sweep hits, and a recording of the window made the mistake
+        /// obvious in three seconds: every row climbed from x120 to x132 while he watched, twelve in
+        /// three seconds, which is four a second, which is exactly the sweep interval. It was
+        /// reporting its own heartbeat. "Candy Bar x240" did not mean 240 candy bars, it meant one
+        /// candy bar that had been looked at twice as often as the rest of the room.
+        ///
+        /// Counting instance ids instead makes the number mean the thing anyone would assume it
+        /// means, and it stops moving when nothing is happening - which is what made it unreadable.
+        /// </summary>
         public static readonly SortedDictionary<string, int> SeenNames = new SortedDictionary<string, int>();
+
+        // Never cleared on a scene change: Unity instance ids are unique for the life of the
+        // process, so an item counted in one cabin is not counted again in the next.
+        private static readonly HashSet<int> _seenIds = new HashSet<int>();
 
         private static int _mask;
         private static bool _maskReady;
@@ -161,7 +176,7 @@ namespace LDPickupDoctor
                     f.Distance = Vector3.Distance(origin, gi.transform.position);
                     f.Name = NameOf(gi);
                     f.Outcome = Judge(gi, f.Name);
-                    Remember(f.Name);
+                    Remember(f.Name, gi);
                     if (!Contains(Items, gi)) Items.Add(f);
                     continue;
                 }
@@ -214,9 +229,12 @@ namespace LDPickupDoctor
             return false;
         }
 
-        private static void Remember(string name)
+        private static void Remember(string name, GearItem gi)
         {
-            if (string.IsNullOrEmpty(name)) return;
+            if (string.IsNullOrEmpty(name) || gi == null) return;
+            int id;
+            try { id = gi.GetInstanceID(); } catch (System.Exception) { return; }
+            if (!_seenIds.Add(id)) return;          // this exact object is already counted
             int n;
             SeenNames[name] = SeenNames.TryGetValue(name, out n) ? n + 1 : 1;
         }

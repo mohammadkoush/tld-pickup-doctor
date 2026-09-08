@@ -331,9 +331,10 @@ namespace LDPickupDoctor
 
         private static void ItemsTab()
         {
-            Note("What the sweep has actually seen this session, and how often. This is the list to "
-               + "copy names from - a name here is guaranteed to match, and a name you typed from "
-               + "memory is not.");
+            Note("Every item the sweep has seen this session, and HOW MANY of them - distinct "
+               + "objects, not how many times it looked. This is the list to add names from: a name "
+               + "here is guaranteed to match, and one typed from memory is not. Green means it is "
+               + "already on the pickup list.");
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("filter", _label, GUILayout.Width(60f));

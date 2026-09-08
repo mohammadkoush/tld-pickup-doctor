@@ -275,3 +275,25 @@ survival components - keep their baselines. Handles are cheap to lose; a baselin
 Checked, so it is not a worry: `EncumberSaveDataProxy` does **not** serialise
 `m_MaxCarryCapacity`, so nothing was written into a save. The cap is rebuilt from the difficulty
 settings each session.
+
+---
+
+## 2026-09-08 - the Items tab was counting its own heartbeat
+
+He recorded the window and said "watch how the numbers increase". Counted from the frames rather
+than guessed: every row went `x120` to `x132` across three seconds. Twelve in three seconds is four
+a second, and four a second is exactly `ScanIntervalSeconds` at its default of 0.25.
+
+So the counter was counting SWEEP HITS, not items. `Candy Bar x240` did not mean 240 candy bars; it
+meant one candy bar that had been looked at twice as often as the rest of the room, because two of
+them were in range. The number was its own heartbeat with an item name attached.
+
+`Sweep.SeenNames` now counts **distinct instance ids**, so the number means what anyone reading it
+would assume: how many of that item this session has actually seen. The id set is never cleared on a
+scene change, because Unity instance ids are unique for the life of the process - an item counted in
+one cabin is not counted again in the next.
+
+**And the sweep no longer runs while the settings window is open.** The world is paused behind it,
+so a sweep can only report its own heartbeat - and worse, auto-pickup and auto-harvest were firing
+behind a window he had opened to stop and think. Outlines and cheats carry on; only the
+world-changing pass stops.

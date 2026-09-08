@@ -99,6 +99,14 @@ namespace LDPickupDoctor
             }
 
             float now = Time.realtimeSinceStartup;
+
+            // NO SWEEPING WHILE THE SETTINGS WINDOW IS OPEN. The world is paused behind it, so
+            // nothing out there can have changed - and a sweep that runs anyway does two unwanted
+            // things: it makes every counter in the Items tab climb while he is trying to read it,
+            // and it lets auto-pickup and auto-harvest fire behind a window he opened to stop and
+            // think. Outlines and cheats carry on below; only the world-changing pass stops.
+            if (Ui.Open) { Diagnostics.Tick(now); Ui.HoldCursor(); Silhouette.Draw(); return; }
+
             if (now >= _nextSweep)
             {
                 _nextSweep = now + Mathf.Max(0.05f, Settings.ScanIntervalSeconds.Value);
