@@ -46,6 +46,21 @@ namespace LDPickupDoctor
         private static readonly Dictionary<int, float> _origAccelById = new Dictionary<int, float>();
 
         // ---- carry -------------------------------------------------------------------------------
+        //
+        // Keyed by Encumber instance id for exactly the reason the speed cheat is, and it was caught
+        // the same way - by reading the log rather than by thinking about it:
+        //
+        //     carry cheat on - the game's cap is 30.0 kg, raised to 500.0 kg
+        //     carry cheat on - the game's cap is 500.0 kg, raised to 500.0 kg
+        //
+        // A scene initialise cleared the "we have the original" flag, the next sweep re-captured, and
+        // what it captured was our own 500. Turning the cheat off would then have restored 500 kg as
+        // though the game had always allowed it - a permanent edit to his save, from a switch whose
+        // whole promise is that it is reversible.
+        //
+        // Encumber is a session-long singleton, so its baseline must SURVIVE a scene change. That is
+        // why this map is not cleared in ForgetScene while the per-scene ones are.
+        private static readonly Dictionary<int, ItemWeight> _origCapacityById = new Dictionary<int, ItemWeight>();
         private static ItemWeight _origCapacity;
         private static bool _haveCapacity;
 
@@ -364,13 +379,18 @@ namespace LDPickupDoctor
             try { enc = GameManager.GetEncumberComponent(); } catch (System.Exception) { }
             if (enc == null) return;
 
+            int encId;
+            try { encId = enc.GetInstanceID(); } catch (System.Exception) { return; }
+
             if (!Settings.CheatUnlimitedCarry.Value)
             {
-                if (_haveCapacity)
+                ItemWeight was;
+                if (_origCapacityById.TryGetValue(encId, out was))
                 {
-                    try { enc.m_MaxCarryCapacity = _origCapacity; } catch (System.Exception) { }
+                    try { enc.m_MaxCarryCapacity = was; } catch (System.Exception) { }
+                    _origCapacityById.Remove(encId);
                     _haveCapacity = false;
-                    Log.Info("carry cheat off - cap back to " + Sweep.KG(_origCapacity).ToString("0.0") + " kg.");
+                    Log.Info("carry cheat off - cap back to " + Sweep.KG(was).ToString("0.0") + " kg.");
                 }
                 return;
             }
@@ -378,13 +398,14 @@ namespace LDPickupDoctor
             try
             {
                 ItemWeight want = ItemWeight.FromKilograms(Mathf.Clamp(Settings.CheatCarryKG.Value, 1f, 100000f));
-                if (!_haveCapacity)
+                if (!_origCapacityById.TryGetValue(encId, out _origCapacity))
                 {
                     _origCapacity = enc.m_MaxCarryCapacity;
-                    _haveCapacity = true;
+                    _origCapacityById[encId] = _origCapacity;
                     Log.Info("carry cheat on - the game's cap is " + Sweep.KG(_origCapacity).ToString("0.0")
                         + " kg, raised to " + Sweep.KG(want).ToString("0.0") + " kg.");
                 }
+                _haveCapacity = true;
                 // Written every sweep, not once: the game recomputes this from buffs, fatigue and
                 // clothing, so a single write would be overwritten within the minute.
                 enc.m_MaxCarryCapacity = want;
@@ -689,16 +710,25 @@ namespace LDPickupDoctor
         /// </summary>
         public static void ForgetScene()
         {
+            // PER-SCENE objects only. Their instance ids mean nothing in the new scene and the
+            // objects themselves are gone, so holding their originals is holding nothing.
             _origHarvestMinutes.Clear();
             _origQuarterMinutes.Clear();
             _origPerpetual.Clear();
             _fires.Clear();
             _fireLifeWas = -1f;
             _fireLifeFalling = 0;
+            _nextFireScan = 0f;
+
+            // Handles are dropped so they are looked up fresh...
             _controller = null;
             _haveAcceleration = false;
             _haveCapacity = false;
-            _nextFireScan = 0f;
+
+            // ...but the BASELINES are not, and that distinction is the whole lesson of this file.
+            // _origAccelById, _origCapacityById and _origRates all describe session-long singletons.
+            // Clearing them here is what made the carry cheat re-capture its own 500 kg as though the
+            // game had always allowed it. Handles are cheap to lose; a baseline is not.
         }
     }
 }

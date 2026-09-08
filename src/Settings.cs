@@ -135,6 +135,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> WindowOpacity;
         public static MelonPreferences_Entry<float> TooltipDelaySeconds;
         public static MelonPreferences_Entry<bool> WindowPausesCursor;
+        public static MelonPreferences_Entry<bool> WindowPausesGame;
 
         // ---- diagnostics -----------------------------------------------------------------------
         public static MelonPreferences_Entry<bool> DiagEnabled;
@@ -317,6 +318,11 @@ namespace LDPickupDoctor
                     + "the row you were trying to read. Zero gives the instant behaviour back.");
             WindowPausesCursor = _iface.CreateEntry("FreeCursor", true,
                 description: "Release the mouse from the game while the window is open.");
+            WindowPausesGame = _iface.CreateEntry("PauseGame", true,
+                description: "Pause the game while the window is open, and resume on the way out. "
+                    + "It sets the game's own pause flag and re-asserts it every frame; if the game "
+                    + "keeps clearing it, the mod falls back to freezing time and says so in the log. "
+                    + "Turn it off if you want to watch something happen while you change a setting.");
 
             DiagEnabled = _diag.CreateEntry("Enabled", true,
                 description: "Count what the sweep decided and write it to the MelonLoader log.");

@@ -15,6 +15,7 @@
 // gives the instant behaviour back.
 
 using System.Collections.Generic;
+using Il2Cpp;
 using MelonLoader;
 using UnityEngine;
 
@@ -55,6 +56,7 @@ namespace LDPickupDoctor
             {
                 _lockWas = Cursor.lockState;
                 _visibleWas = Cursor.visible;
+                PauseOn();
             }
             else
             {
@@ -65,15 +67,124 @@ namespace LDPickupDoctor
                     Cursor.lockState = _lockWas;
                     Cursor.visible = _visibleWas;
                 }
+                PauseOff();
             }
         }
 
         /// <summary>Called every frame while open - the game re-locks the cursor, so we re-free it.</summary>
         public static void HoldCursor()
         {
-            if (!Open || !Settings.WindowPausesCursor.Value) return;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            if (Open && Settings.WindowPausesCursor.Value)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            HoldPause();
+            SwallowPauseMenu();
+        }
+
+        // ---- pausing -----------------------------------------------------------------------------
+        //
+        // GameManager.m_IsPaused is the game's own flag, read by its own UpdatePaused/UpdateNotPaused
+        // split, so setting it is the honest way to pause rather than freezing the clock underneath
+        // a game that does not know it stopped.
+        //
+        // It is RE-ASSERTED EVERY FRAME, and then READ BACK. Setting a flag the game also writes is
+        // not evidence that anything is paused, and this station has a rule about the difference. If
+        // the flag keeps coming back false, the game is fighting us, and rather than pretending
+        // otherwise the mod escalates to Time.timeScale = 0 and says in the log that it had to.
+
+        private static bool _pausedWas;
+        private static bool _havePaused;
+        private static int _pauseLosses;
+        private static float _timeScaleWas = 1f;
+        private static bool _frozeTime;
+        private static float _escapeClosedAt = -99f;
+
+        private static void PauseOn()
+        {
+            if (!Settings.WindowPausesGame.Value) return;
+            try
+            {
+                if (GameManager.IsMainMenuActive()) return;   // nothing to pause in a menu
+                _pausedWas = GameManager.m_IsPaused;
+                _havePaused = true;
+                _pauseLosses = 0;
+                GameManager.m_IsPaused = true;
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("pause-threw", "pausing threw: " + e.Message
+                    + " - the window still opens, the world just keeps running behind it.");
+            }
+        }
+
+        private static void HoldPause()
+        {
+            if (!Open || !_havePaused) return;
+            try
+            {
+                if (!GameManager.m_IsPaused)
+                {
+                    _pauseLosses++;
+                    GameManager.m_IsPaused = true;
+
+                    if (_pauseLosses == 5 && !_frozeTime)
+                    {
+                        // ESCALATE. Five frames of the game clearing our flag is the game winning,
+                        // not a wobble. Freeze the clock instead - our own code runs on realtime, so
+                        // the window keeps working.
+                        _timeScaleWas = Time.timeScale;
+                        Time.timeScale = 0f;
+                        _frozeTime = true;
+                        Log.Warn("the game cleared its own pause flag five frames running, so time is "
+                            + "frozen instead while the window is open. Both are undone on the way out.");
+                    }
+                }
+            }
+            catch (System.Exception) { }
+        }
+
+        private static void PauseOff()
+        {
+            if (!_havePaused && !_frozeTime) return;
+            try { GameManager.m_IsPaused = _pausedWas; } catch (System.Exception) { }
+            if (_frozeTime)
+            {
+                Time.timeScale = _timeScaleWas <= 0f ? 1f : _timeScaleWas;
+                _frozeTime = false;
+            }
+            _havePaused = false;
+            _pauseLosses = 0;
+        }
+
+        /// <summary>
+        /// Escape closes this window, and the game reads Escape too - through its own input polling,
+        /// which no IMGUI Event.Use can reach. So the press that closes the settings opens the game's
+        /// pause menu a frame later. This closes that menu, but ONLY within a third of a second of an
+        /// Escape that closed our window, so an Escape he meant for the game is left alone.
+        /// </summary>
+        private static void SwallowPauseMenu()
+        {
+            if (Time.realtimeSinceStartup - _escapeClosedAt > 0.35f) return;
+            try
+            {
+                if (InterfaceManager.IsPanelEnabled<Panel_PauseMenu>())
+                {
+                    InterfaceManager.TrySetPanelEnabled<Panel_PauseMenu>(false);
+                    _escapeClosedAt = -99f;
+                    Log.OnceInfo("swallowed-pause",
+                        "the Escape that closed the settings window also opened the game's pause menu, "
+                        + "so that menu was closed again. The game reads Escape through its own input "
+                        + "polling, which a mod cannot intercept.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                _escapeClosedAt = -99f;
+                Log.OnceWarn("swallow-threw", "could not close the game's pause menu after Escape: "
+                    + e.Message + " - press Escape once more to dismiss it.");
+            }
         }
 
         public static void Draw()
@@ -103,6 +214,7 @@ namespace LDPickupDoctor
             if (Event.current != null && Event.current.type == EventType.KeyDown
                 && Event.current.keyCode == KeyCode.Escape)
             {
+                _escapeClosedAt = Time.realtimeSinceStartup;
                 Toggle();
                 Event.current.Use();
                 return;
@@ -378,6 +490,7 @@ namespace LDPickupDoctor
             Slider(Settings.WindowOpacity, 0.3f, 1f, "Window opacity");
             Slider(Settings.TooltipDelaySeconds, 0f, 5f, "Explanation delay (s)");
             Toggle(Settings.WindowPausesCursor, "Free the mouse while open");
+            Toggle(Settings.WindowPausesGame, "Pause the game while open");
         }
 
         private static void CheatsTab()

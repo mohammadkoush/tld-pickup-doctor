@@ -237,3 +237,41 @@ id, so an object already seen is never re-baselined.
 The same trap is handled explicitly in `Cheats.Scale`, used by the five rate dials: on the way back
 to `1.00` the stored baseline is *restored* before tracking resumes, because the live value at that
 moment is still our own write. That branch carries a comment saying so; do not simplify it away.
+
+---
+
+## 2026-09-08 - the window pauses the game
+
+F10 now pauses; Escape (or F10 again) resumes. `Interface.PauseGame`, on by default.
+
+It sets `GameManager.m_IsPaused`, the game's own flag, read by its own `UpdatePaused` /
+`UpdateNotPaused` split - the honest way to pause, rather than freezing the clock under a game that
+does not know it stopped. The flag is **re-asserted every frame and then read back**, because
+setting a flag the game also writes is not evidence that anything is paused. Five frames of the game
+clearing it is treated as the game winning: the mod escalates to `Time.timeScale = 0`, says so in
+the log, and undoes both on the way out.
+
+**Escape reaches the game as well as us.** The game polls Escape through its own input layer, which
+no IMGUI `Event.Use` can intercept, so the press that closes our window opens its pause menu a frame
+later. `Ui.SwallowPauseMenu` closes that menu - but only within 0.35s of an Escape that closed our
+window, so an Escape he meant for the game is left alone.
+
+### The carry cheat had the same re-baseline bug as the speed cheat
+
+Caught in the log, again, two lines apart:
+
+    carry cheat on - the game's cap is 30.0 kg, raised to 500.0 kg
+    carry cheat on - the game's cap is 500.0 kg, raised to 500.0 kg
+
+`ForgetScene` cleared the "we have the original" flag on every scene initialise, so the next sweep
+re-captured, and what it captured was our own 500. Turning the cheat off would then have "restored"
+500 kg as though the game had always allowed it.
+
+**The rule this produced, and the reason `ForgetScene` now carries a comment about it:** per-scene
+objects (fires, carcasses, harvestables) have their maps cleared on a scene change, because their
+ids mean nothing afterwards. Session-long singletons - `Encumber`, `vp_FPSController`, the five
+survival components - keep their baselines. Handles are cheap to lose; a baseline is not.
+
+Checked, so it is not a worry: `EncumberSaveDataProxy` does **not** serialise
+`m_MaxCarryCapacity`, so nothing was written into a save. The cap is rebuilt from the difficulty
+settings each session.
