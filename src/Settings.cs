@@ -49,6 +49,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> PickupRespectWeight;
         public static MelonPreferences_Entry<float> PickupWeightHeadroomKG;
         public static MelonPreferences_Entry<bool> PickupSkipRuined;
+        public static MelonPreferences_Entry<float> PickupDropGrace;
 
         // ---- highlight -------------------------------------------------------------------------
         public static MelonPreferences_Entry<bool> HighlightEnabled;
@@ -205,6 +206,13 @@ namespace LDPickupDoctor
             PickupWeightHeadroomKG = _pickup.CreateEntry("WeightHeadroomKG", 0.5f,
                 description: "Leave this much capacity spare, in kilograms, so auto-pickup cannot be the "
                     + "thing that tips you into encumbered without you noticing.");
+            PickupDropGrace = _pickup.CreateEntry("DropGraceSeconds", 30f,
+                description: "Seconds before an item you have owned can be picked up again after "
+                    + "it is put down. A sweep running four times a second cannot tell a "
+                    + "deliberate drop from loot, so anything that has been in your pack gets a "
+                    + "grace period from the moment it lands. Items that have never been carried "
+                    + "are not on this clock at all. Zero turns it off.");
+
             PickupSkipRuined = _pickup.CreateEntry("SkipRuined", true,
                 description: "Do not pick up items at zero condition. They are worth nothing and fill "
                     + "the backpack. Turn off if you collect ruined cloth to break down.");

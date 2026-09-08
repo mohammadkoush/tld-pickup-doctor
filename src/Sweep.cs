@@ -37,7 +37,8 @@ namespace LDPickupDoctor
         AttachedElsewhere,  // parented to a place point, travois, or similar
         NotTargetName,      // a real item, just not one on the name list
         TakeFailed,         // every gate passed and the game still refused - the interesting one
-        NoGearItem          // a collider on the gear layer with no GearItem on it
+        NoGearItem,         // a collider on the gear layer with no GearItem on it
+        JustDropped         // put down a moment ago - see the grace period
     }
 
     internal struct Found
@@ -81,6 +82,17 @@ namespace LDPickupDoctor
         // Never cleared on a scene change: Unity instance ids are unique for the life of the
         // process, so an item counted in one cabin is not counted again in the next.
         private static readonly HashSet<int> _seenIds = new HashSet<int>();
+
+        // WHEN AN ITEM THAT BELONGED TO THE PLAYER FIRST APPEARED ON THE GROUND.
+        //
+        // A mod that takes back what was just put down is not helping, it is arguing. Dropping a
+        // heavy item to make room, or placing something deliberately, both look exactly like loot to
+        // a sweep running four times a second - so an item the player has owned gets a grace period
+        // from the moment it is first seen lying there.
+        //
+        // The "has been owned" flag is what keeps this from delaying everything: a stick that has
+        // never been in a pack is not on this clock at all, and is picked up as immediately as ever.
+        private static readonly Dictionary<int, float> _onGroundSince = new Dictionary<int, float>();
 
         private static int _mask;
         private static bool _maskReady;
@@ -177,6 +189,7 @@ namespace LDPickupDoctor
                     f.Name = NameOf(gi);
                     f.Outcome = Judge(gi, f.Name);
                     Remember(f.Name, gi);
+                    NoteOnGround(gi);
                     if (!Contains(Items, gi)) Items.Add(f);
                     continue;
                 }
@@ -229,6 +242,35 @@ namespace LDPickupDoctor
             return false;
         }
 
+        /// <summary>First sighting on the ground, for anything the player has owned.</summary>
+        private static void NoteOnGround(GearItem gi)
+        {
+            try
+            {
+                if (gi.m_InPlayerInventory) return;
+                if (!gi.m_BeenInPlayerInventory && !gi.m_HasBeenOwnedByPlayer) return;
+                int id = gi.GetInstanceID();
+                if (_onGroundSince.ContainsKey(id)) return;
+                _onGroundSince[id] = Time.realtimeSinceStartup;
+            }
+            catch (System.Exception) { }
+        }
+
+        /// <summary>Seconds left on an item's grace, or zero if it has none.</summary>
+        public static float GraceLeft(GearItem gi)
+        {
+            float grace = Settings.PickupDropGrace.Value;
+            if (grace <= 0f || gi == null) return 0f;
+            try
+            {
+                float since;
+                if (!_onGroundSince.TryGetValue(gi.GetInstanceID(), out since)) return 0f;
+                float left = grace - (Time.realtimeSinceStartup - since);
+                return left > 0f ? left : 0f;
+            }
+            catch (System.Exception) { return 0f; }
+        }
+
         private static void Remember(string name, GearItem gi)
         {
             if (string.IsNullOrEmpty(name) || gi == null) return;
@@ -278,6 +320,11 @@ namespace LDPickupDoctor
                 try { if (gi.m_CurrentHP <= 0f) return Outcome.Ruined; }
                 catch (System.Exception) { }
             }
+
+            // The grace period comes before the name test on purpose: an item just put down is
+            // refused whether or not it is on the pickup list, so the answer does not change if the
+            // list does.
+            if (GraceLeft(gi) > 0f) return Outcome.JustDropped;
 
             // NAME BEFORE STATE, and the first log is why. The first in-world run reported
             // CannotInteract=2259 against Success=3 in one minute, which reads as a mod that is

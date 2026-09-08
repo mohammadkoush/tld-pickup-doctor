@@ -56,8 +56,12 @@ namespace LDPickupDoctor
                 if (f.Outcome != Outcome.WouldSucceed)
                 {
                     Count(f.Outcome);
+                    // JustDropped is left out of the noisy log with the other two: it fires four
+                    // times a second for thirty seconds on every item put down, and a refusal that
+                    // is working exactly as intended does not need announcing two hundred times.
                     if (Settings.DiagLogEveryRefusal.Value
                         && f.Outcome != Outcome.NotTargetName
+                        && f.Outcome != Outcome.JustDropped
                         && f.Outcome != Outcome.AlreadyHeld)
                     {
                         Log.Info("refused " + f.Name + " -> " + f.Outcome + Explain(f.Outcome));
@@ -189,6 +193,8 @@ namespace LDPickupDoctor
                     return "  (the game says it cannot be interacted with right now)";
                 case Outcome.AttachedElsewhere:
                     return "  (attached to a place point or a travois)";
+                case Outcome.JustDropped:
+                    return "  (put down a moment ago - the grace period is on the Pickup tab)";
                 case Outcome.Ruined:
                     return "  (ruined - turn off Pickup.SkipRuined if you want these)";
                 case Outcome.TakeFailed:

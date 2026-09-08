@@ -492,6 +492,7 @@ namespace LDPickupDoctor
             Toggle(Settings.PickupRespectWeight, "Respect carry weight");
             Slider(Settings.PickupWeightHeadroomKG, 0f, 5f, "Weight headroom (kg)");
             Toggle(Settings.PickupSkipRuined, "Skip ruined items");
+            Slider(Settings.PickupDropGrace, 0f, 120f, "Grace after dropping (seconds)");
 
             GUILayout.Space(8f);
             Stat("taken this session", Pickup.TakenThisSession.ToString());
