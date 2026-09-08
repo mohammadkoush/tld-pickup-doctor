@@ -2,7 +2,7 @@
 //
 // Config lives in MelonLoader's own UserData\MelonPreferences.cfg, under categories prefixed
 // "LDPD_". That is deliberate: a file the loader already writes, backs up and hot-reloads costs
-// nothing to maintain, and he can edit it with the game shut without going through the window.
+// nothing to maintain, and it can be edited with the game shut, without going through the window.
 //
 // THE RULE THESE DEFAULTS ANSWER TO, inherited from the Green Hell mod and unchanged:
 //
@@ -95,9 +95,9 @@ namespace LDPickupDoctor
         //
         // These are NOT held to the rule above, and that is the whole reason they live in their own
         // category with their own tab. Everything else in this mod removes repetition and leaves the
-        // price alone. This section removes the price, on purpose, because he asked for it for
-        // testing: you cannot test a pickup radius against a carry cap you keep hitting, or an
-        // outline colour across a map you have to walk.
+        // price alone. This section removes the price, on purpose, because testing needs it: a
+        // pickup radius cannot be judged against a carry cap that keeps being hit, nor an outline
+        // colour across a map that has to be walked.
         //
         // Every one is off (or neutral) by default, every one is reversible, and every one is
         // announced in the diagnostic report while it is on - so a strange number in a tally a week
@@ -335,6 +335,46 @@ namespace LDPickupDoctor
             MelonPreferences.Save();
         }
 
+        // ---- saving, debounced -------------------------------------------------------------------
+        //
+        // Dragging one slider wrote the whole preferences file eight times in sixty milliseconds -
+        // the log said so in a row of "Preferences Saved!" lines. Every frame of a drag is a change,
+        // and every change was a disk write of the entire config.
+        //
+        // So changes mark the file dirty and one write happens a second later, plus an immediate one
+        // whenever the window closes. Nothing can be lost: the value is already live in memory the
+        // instant it changes, and the only thing being deferred is the copy on disk.
+        private static bool _dirty;
+        private static float _dirtySince;
+
+        public static void SaveSoon()
+        {
+            if (!_dirty) _dirtySince = Time.realtimeSinceStartup;
+            _dirty = true;
+        }
+
+        /// <summary>Called every frame. Writes at most once a second, and only after a change.</summary>
+        public static void FlushSaves()
+        {
+            if (!_dirty) return;
+            if (Time.realtimeSinceStartup - _dirtySince < 1f) return;
+            SaveNow();
+        }
+
+        public static void SaveNow()
+        {
+            _dirty = false;
+            try { MelonPreferences.Save(); }
+            catch (System.Exception e)
+            {
+                // The dirty flag goes back ON, so a failed write is retried rather than dropped.
+                _dirty = true;
+                _dirtySince = Time.realtimeSinceStartup;
+                Log.OnceWarn("save-prefs", "writing MelonPreferences threw: " + e.Message
+                    + " - the settings are still live in memory and the write is retried.");
+            }
+        }
+
         /// <summary>Hex to colour, with the brightness dial applied and a loud fallback.</summary>
         public static Color Colour(MelonPreferences_Entry<string> entry, Color fallback)
         {
@@ -342,7 +382,8 @@ namespace LDPickupDoctor
             string raw = entry == null ? null : entry.Value;
             if (string.IsNullOrEmpty(raw) || !ColorUtility.TryParseHtmlString(raw.Trim(), out c))
             {
-                // Never silently substitute: a colour he typed and cannot see is a bug he cannot find.
+                // Never silently substitute: a colour that was typed and cannot be seen is a bug
+                // that cannot be found.
                 Log.OnceWarn("colour-" + (entry == null ? "?" : entry.Identifier),
                     "colour '" + raw + "' is not a hex value like #e8b44d - using the default for now.");
                 c = fallback;

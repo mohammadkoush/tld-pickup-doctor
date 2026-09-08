@@ -12,7 +12,7 @@
 // This is the whole point the Green Hell version was built around, and it transfers exactly. A
 // pickup has to clear several gates. If any gate refuses and the mod returns silently, then "the
 // mod is broken" and "the mod tried and was blocked" look IDENTICAL: nothing in the log, nothing in
-// your pack. So every gate here ends in a named Outcome, and the tally counts them. When something
+// the pack. So every gate here ends in a named Outcome, and the tally counts them. When something
 // stops working, the log already says which gate said no, and you have not lost an evening to it.
 
 using System.Collections.Generic;
@@ -68,7 +68,7 @@ namespace LDPickupDoctor
         /// sweep looked at one.
         ///
         /// The first version counted sweep hits, and a recording of the window made the mistake
-        /// obvious in three seconds: every row climbed from x120 to x132 while he watched, twelve in
+        /// obvious in three seconds: every row climbed from x120 to x132 in view, twelve in
         /// three seconds, which is four a second, which is exactly the sweep interval. It was
         /// reporting its own heartbeat. "Candy Bar x240" did not mean 240 candy bars, it meant one
         /// candy bar that had been looked at twice as often as the rest of the room.
@@ -242,7 +242,7 @@ namespace LDPickupDoctor
         public static string NameOf(GearItem gi)
         {
             if (gi == null) return "";
-            // Display name first because it is what he reads on screen; the object name is the
+            // Display name first because it is what appears on screen; the object name is the
             // fallback because the display name goes through localisation and can come back empty
             // before the tables are loaded.
             try
@@ -282,9 +282,9 @@ namespace LDPickupDoctor
             // NAME BEFORE STATE, and the first log is why. The first in-world run reported
             // CannotInteract=2259 against Success=3 in one minute, which reads as a mod that is
             // being refused constantly - and it was nothing of the kind. Those were fixtures and
-            // props on the gear layer that he never asked for, being state-checked before anyone
-            // asked whether he wanted them. Asking "is this one of his?" first makes the tally a
-            // report about items he actually listed, which is the only thing the tally is for.
+            // props on the gear layer that nobody asked for, being state-checked before anything
+            // asked whether they were wanted. Asking "is this one on the list?" first makes the
+            // tally a report about listed items, which is the only thing the tally is for.
             if (!Matches(name, gi)) return Outcome.NotTargetName;
 
             bool canInteract;
@@ -321,7 +321,7 @@ namespace LDPickupDoctor
         }
 
         /// <summary>
-        /// Would taking this put him over the line? Weight is the game's own price for hoarding and
+        /// Would taking this cross the line? Weight is the game's own price for hoarding and
         /// this mod does not discount it - so the answer is computed from the game's own numbers
         /// rather than from a figure of ours.
         /// </summary>

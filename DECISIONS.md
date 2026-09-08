@@ -297,3 +297,48 @@ one cabin is not counted again in the next.
 so a sweep can only report its own heartbeat - and worse, auto-pickup and auto-harvest were firing
 behind a window he had opened to stop and think. Outlines and cheats carry on; only the
 world-changing pass stops.
+
+---
+
+## 2026-09-08 - the game stayed paused after Escape, and why one unpause was never enough
+
+Reported as "I cannot unpause no matter how many times I hit escape". The log had the whole
+sequence, and the order is the entire bug:
+
+1. our window sees Escape, closes, and unpauses - `m_IsPaused = false`
+2. the game polls the **same** Escape, opens its pause menu, and pauses **itself**
+3. `SwallowPauseMenu` closes that menu, because it was not what the key was pressed for
+
+After step 3 the menu is gone and the flag the menu set is still true: the world is frozen with
+nothing on screen to unfreeze it, and pressing Escape again simply repeats the dance. Unpausing at
+step 1 was never going to be enough, because the pause that mattered had not happened yet.
+
+`Ui.GuardUnpause` now holds the invariant **the game must never be left paused by us**: for two
+seconds after an Escape that closed the window, the pause flag is checked every frame and cleared if
+it comes back, and `Time.timeScale` is started again if it is zero. Two seconds, and only after our
+own Escape, so a pause menu opened deliberately a moment later is untouched. Confirmed in the log -
+the swallow line and the guard line now appear at the same millisecond.
+
+A second bug in the same log: `SwallowPauseMenu` was clearing the Escape timestamp on success, which
+killed the guard window before the guard could run. The timestamp is left alone now, and both the
+success and failure paths carry a comment saying why - it is the "never clear the intent" rule in
+miniature.
+
+## 2026-09-08 - preferences are written once a second, not once a frame
+
+The same log showed eight `Preferences Saved!` lines inside sixty milliseconds: dragging one slider
+wrote the entire config file every frame. `Settings.SaveSoon` marks it dirty, `Settings.FlushSaves`
+writes at most once a second, and closing the window forces a write. A failed write puts the dirty
+flag back rather than dropping the change, and the value is live in memory the instant it changes -
+only the copy on disk is deferred.
+
+## 2026-09-08 - the mod's own prose is not addressed to anybody
+
+Standing instruction: this mod is going to be uploaded, so nothing shipped in it may read as a note
+to one person. No "you asked for it", no third-person "he" or "his". The reasoning stays - it is the
+most useful thing in these files - it just stops being addressed to anybody. The Cheats tab now
+opens with "This page is meant for testing. Every other page removes repetition only and leaves the
+game's price exactly where it was. This page removes the price."
+
+Addressing the reader as "you" in documentation is fine and normal. What is not fine is text that
+only makes sense to the author.

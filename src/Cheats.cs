@@ -1,11 +1,11 @@
-// Cheats. His words: "some features I would like to add for testing".
+// Cheats. Added for testing, and kept because they are useful for testing.
 //
 // THIS FILE IS THE EXCEPTION TO THE MOD'S RULE, AND IT IS FENCED OFF FOR THAT REASON.
 //
 // Everything else here removes repetition and leaves the game's price exactly where Hinterland put
-// it. This removes the price. That is not a slip, it is the request: you cannot test a pickup radius
-// against a carry cap you keep hitting, you cannot judge outline colours across a map you have to
-// walk, and you cannot check what a full clip looks like on the HUD without a full clip.
+// it. This removes the price. That is not a slip, it is the request: a pickup radius cannot be tested
+// against a carry cap that keeps being hit, outline colours cannot be judged across a map that has
+// to be walked, and a full clip on the HUD cannot be checked without a full clip.
 //
 // So it lives in its own file, its own preferences category and its own tab, everything is off or
 // neutral by default, and the diagnostic report names every cheat that is on while it is on - so a
@@ -15,7 +15,7 @@
 //
 // Nothing is set without its original being stored first, and nothing stays set after its switch
 // goes off. That is not politeness - three of these write to objects the game SERIALISES, and a
-// cheat that forgets what it overwrote is a cheat that quietly edits a save he keeps.
+// cheat that forgets what it overwrote is a cheat that quietly edits a save someone keeps.
 
 using System.Collections.Generic;
 using Il2Cpp;
@@ -55,7 +55,7 @@ namespace LDPickupDoctor
         //
         // A scene initialise cleared the "we have the original" flag, the next sweep re-captured, and
         // what it captured was our own 500. Turning the cheat off would then have restored 500 kg as
-        // though the game had always allowed it - a permanent edit to his save, from a switch whose
+        // though the game had always allowed it - a permanent edit to a save, from a switch whose
         // whole promise is that it is reversible.
         //
         // Encumber is a session-long singleton, so its baseline must SURVIVE a scene change. That is
@@ -360,7 +360,7 @@ namespace LDPickupDoctor
             float step = Mathf.Max(0.05f, Settings.CheatSpeedStep.Value);
             float now = Mathf.Clamp(Settings.CheatSpeed.Value + direction * step, 0.25f, 8f);
             Settings.CheatSpeed.Value = now;
-            MelonLoader.MelonPreferences.Save();
+            Settings.SaveSoon();
             Log.Info("speed multiplier " + now.ToString("0.00") + "x"
                 + (Mathf.Approximately(now, 1f) ? "  (this is the off position)" : ""));
         }
@@ -371,7 +371,7 @@ namespace LDPickupDoctor
         // The cap is raised at its source, Encumber.m_MaxCarryCapacity, rather than by teaching the
         // mod's own weight gate to look the other way. That matters: the gate reads the game's number,
         // so raising the number makes the gate pass on its own, the encumbrance bar agrees, and there
-        // is exactly one truth about how much he can carry instead of two.
+        // is exactly one truth about how much can be carried instead of two.
         // ------------------------------------------------------------------------------------------
         private static void Carry()
         {
@@ -544,7 +544,7 @@ namespace LDPickupDoctor
         // ------------------------------------------------------------------------------------------
         // UNLIMITED AMMO
         //
-        // Only the gun in his hands, and only the clip. Ammo in the pack is not touched, because the
+        // Only the gun in hand, and only the clip. Ammo in the pack is not touched, because the
         // ask was "unlimited ammo when using a firearm" and a pack that silently refills is a
         // different, larger thing that would also confuse every weight reading in the report.
         //

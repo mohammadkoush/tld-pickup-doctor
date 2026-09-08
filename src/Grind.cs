@@ -53,7 +53,7 @@ namespace LDPickupDoctor
 
                 if (Settings.HarvestRequireTool.Value && !ToolReady(h))
                 {
-                    // Not a failure - a price he has not paid yet. Backed off gently so walking
+                    // Not a failure - a price that has not been paid yet. Backed off gently so walking
                     // past a sapling with no hatchet does not cost a lookup every frame.
                     Defer(id, 5f);
                     continue;
@@ -101,7 +101,7 @@ namespace LDPickupDoctor
         }
 
         /// <summary>
-        /// Does he have what this plant demands?
+        /// Is what this plant demands actually in the pack?
         ///
         /// HasToolRequired says the plant wants a tool. GetRequiredTool answers with the tool that
         /// satisfies it, and comes back null when nothing in the pack does - so the pair is read as
@@ -174,7 +174,7 @@ namespace LDPickupDoctor
         /// <summary>
         /// The refund switch, applied and reversible. Nearby break-down objects have their hour cost
         /// zeroed while it is on, and their own original value put back the moment it goes off - so
-        /// turning it on to try it does not permanently alter the world he saves.
+        /// turning it on to try it does not permanently alter the world that gets saved.
         /// </summary>
         public static void BreakDownPass()
         {

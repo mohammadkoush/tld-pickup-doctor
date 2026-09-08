@@ -61,6 +61,7 @@ namespace LDPickupDoctor
             if (!Settings.Enabled.Value) return;
 
             Hotkeys();
+            Settings.FlushSaves();
 
             Transform player = null;
             try { player = GameManager.GetPlayerTransform(); } catch (System.Exception) { }
@@ -102,8 +103,8 @@ namespace LDPickupDoctor
 
             // NO SWEEPING WHILE THE SETTINGS WINDOW IS OPEN. The world is paused behind it, so
             // nothing out there can have changed - and a sweep that runs anyway does two unwanted
-            // things: it makes every counter in the Items tab climb while he is trying to read it,
-            // and it lets auto-pickup and auto-harvest fire behind a window he opened to stop and
+            // things: it makes every counter in the Items tab climb while it is being read, and it
+            // lets auto-pickup and auto-harvest fire behind a window opened in order to stop and
             // think. Outlines and cheats carry on below; only the world-changing pass stops.
             if (Ui.Open) { Diagnostics.Tick(now); Ui.HoldCursor(); Silhouette.Draw(); return; }
 
@@ -203,14 +204,14 @@ namespace LDPickupDoctor
                 {
                     Settings.HighlightEnabled.Value = !Settings.HighlightEnabled.Value;
                     if (!Settings.HighlightEnabled.Value) Highlight.Off();
-                    MelonPreferences.Save();
+                    Settings.SaveSoon();
                     Log.Info("outlines " + (Settings.HighlightEnabled.Value ? "on" : "off"));
                 }
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeyTogglePickup, KeyCode.F9)))
                 {
                     Settings.PickupEnabled.Value = !Settings.PickupEnabled.Value;
-                    MelonPreferences.Save();
+                    Settings.SaveSoon();
                     Log.Info("auto pickup " + (Settings.PickupEnabled.Value ? "on" : "off"));
                 }
 

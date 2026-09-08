@@ -1,10 +1,10 @@
 // The settings window. F10 by default.
 //
 // TWO RULES THE TAB CODE HOLDS TO, both load-bearing, both carried over from the Green Hell version
-// because they came from how he actually uses a window:
+// because they come from how a window like this is actually used:
 //
 //   ORDER NEVER CHANGES. Tabs are appended, never inserted, and the order of rows inside a tab is
-//   fixed. He finds an option by where it sits, not by reading down the column - an option that
+//   fixed. An option is found by where it sits, not by reading down the column - one that
 //   moves between launches cannot be found by memory at all.
 //
 //   NO OPTION APPEARS TWICE. The Keys tab OWNS every hotkey wherever it was bound, and those rows
@@ -62,6 +62,7 @@ namespace LDPickupDoctor
             {
                 if (_focusKey.Length > 0) Commit();
                 _rebinding = null;
+                Settings.SaveNow();
                 if (Settings.WindowPausesCursor.Value)
                 {
                     Cursor.lockState = _lockWas;
@@ -81,6 +82,7 @@ namespace LDPickupDoctor
             }
             HoldPause();
             SwallowPauseMenu();
+            GuardUnpause();
         }
 
         // ---- pausing -----------------------------------------------------------------------------
@@ -159,10 +161,61 @@ namespace LDPickupDoctor
         }
 
         /// <summary>
+        /// THE GAME MUST NEVER BE LEFT PAUSED BY US. This is the guard that makes that true.
+        ///
+        /// The order of events on Escape is what broke it, and the log gave the whole sequence:
+        ///
+        ///   1. our window sees Escape, closes, and unpauses    -> m_IsPaused = false
+        ///   2. the game polls the SAME Escape, opens its pause menu, and pauses ITSELF
+        ///   3. we close that menu, because it was not what the key was pressed for
+        ///
+        /// After step 3 the menu is gone and the flag the menu set is still true, so the world is
+        /// frozen with nothing on screen to unfreeze it - and pressing Escape again just repeats the
+        /// whole dance. Unpausing once at step 1 was never going to be enough, because the pause that
+        /// mattered had not happened yet.
+        ///
+        /// So for two seconds after an Escape that closed our window, the flag is checked every frame
+        /// and cleared if it comes back. Two seconds, and only after OUR Escape, so a pause menu opened
+        /// deliberately a moment later is left completely alone.
+        /// </summary>
+        private static void GuardUnpause()
+        {
+            if (Open) return;
+            if (Time.realtimeSinceStartup - _escapeClosedAt > 2f) return;
+            try
+            {
+                // Both mechanisms, because there are two ways to be frozen and only one of them is
+                // the flag. If the game's own menu also stopped the clock on its way in, clearing
+                // the flag alone would leave the world just as still and the log just as innocent.
+                if (Time.timeScale == 0f && !_frozeTime)
+                {
+                    Time.timeScale = 1f;
+                    Log.OnceInfo("guard-timescale",
+                        "time was still stopped after the settings window closed, so it was started "
+                        + "again. This only happens in the two seconds after an Escape.");
+                }
+
+                if (GameManager.m_IsPaused)
+                {
+                    GameManager.m_IsPaused = false;
+                    Log.OnceInfo("guard-unpause",
+                        "the game paused itself on the same Escape that closed the settings window, "
+                        + "one frame after we had already unpaused. It is cleared again for two "
+                        + "seconds after that key, which is the only window in which it can happen.");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("guard-threw", "could not clear the game's pause flag: " + e.Message
+                    + " - press Escape once to open the pause menu and once more to close it.");
+            }
+        }
+
+        /// <summary>
         /// Escape closes this window, and the game reads Escape too - through its own input polling,
         /// which no IMGUI Event.Use can reach. So the press that closes the settings opens the game's
         /// pause menu a frame later. This closes that menu, but ONLY within a third of a second of an
-        /// Escape that closed our window, so an Escape he meant for the game is left alone.
+        /// Escape that closed our window, so a deliberate Escape is left alone.
         /// </summary>
         private static void SwallowPauseMenu()
         {
@@ -172,7 +225,9 @@ namespace LDPickupDoctor
                 if (InterfaceManager.IsPanelEnabled<Panel_PauseMenu>())
                 {
                     InterfaceManager.TrySetPanelEnabled<Panel_PauseMenu>(false);
-                    _escapeClosedAt = -99f;
+                    // The timestamp is deliberately NOT cleared here. It is what keeps GuardUnpause
+                    // running for the two seconds after this, and clearing it was the reason the
+                    // world stayed frozen: the menu went away and the flag it had set did not.
                     Log.OnceInfo("swallowed-pause",
                         "the Escape that closed the settings window also opened the game's pause menu, "
                         + "so that menu was closed again. The game reads Escape through its own input "
@@ -181,7 +236,8 @@ namespace LDPickupDoctor
             }
             catch (System.Exception e)
             {
-                _escapeClosedAt = -99f;
+                // The intent is not cleared: GuardUnpause still runs, so even if the menu stays up
+                // the world is not left frozen behind it.
                 Log.OnceWarn("swallow-threw", "could not close the game's pause menu after Escape: "
                     + e.Message + " - press Escape once more to dismiss it.");
             }
@@ -203,7 +259,7 @@ namespace LDPickupDoctor
                     if (Event.current.keyCode != KeyCode.Escape)
                     {
                         _rebinding.Value = Event.current.keyCode.ToString();
-                        MelonPreferences.Save();
+                        Settings.SaveSoon();
                     }
                     _rebinding = null;
                     Event.current.Use();
@@ -269,7 +325,7 @@ namespace LDPickupDoctor
             {
                 _rect.x = e.mousePosition.x - _dragFrom.x;
                 _rect.y = e.mousePosition.y - _dragFrom.y;
-                // Never let it leave the screen entirely - a window he cannot reach is a window gone.
+                // Never let it leave the screen entirely - a window that cannot be reached is gone.
                 _rect.x = Mathf.Clamp(_rect.x, -_rect.width + 80f, Screen.width - 80f);
                 _rect.y = Mathf.Clamp(_rect.y, 0f, Screen.height - 40f);
                 e.Use();
@@ -497,10 +553,10 @@ namespace LDPickupDoctor
         private static void CheatsTab()
         {
             GUI.color = new Color(1f, 0.72f, 0.45f);
-            GUILayout.Label("These do not follow the rule the rest of this mod follows. Everything in "
-                + "the other tabs removes repetition and leaves the game's price alone. Everything "
-                + "here removes the price, because you asked for it for testing. All of it is "
-                + "reversible, and the log names every one that is on.", _label);
+            GUILayout.Label("This page is meant for testing. Every other page removes repetition only "
+                + "and leaves the game's price exactly where it was. This page removes the price. "
+                + "All of it is off or neutral by default, all of it is reversible, and the log "
+                + "names every one that is on.", _label);
             GUI.color = Color.white;
             GUILayout.Space(8f);
 
@@ -512,7 +568,7 @@ namespace LDPickupDoctor
             if (GUILayout.Button("normal", GUILayout.Width(90f)))
             {
                 Settings.CheatSpeed.Value = 1f;
-                MelonPreferences.Save();
+                Settings.SaveSoon();
             }
             if (GUILayout.Button("faster", GUILayout.Width(90f))) Cheats.NudgeSpeed(1);
             GUILayout.FlexibleSpace();
@@ -598,7 +654,7 @@ namespace LDPickupDoctor
             if (_focusEntry != null && _focusEntry.Value != _focusText)
             {
                 _focusEntry.Value = _focusText;
-                MelonPreferences.Save();
+                Settings.SaveSoon();
             }
             else if (_focusEntry == null)
             {
@@ -647,7 +703,7 @@ namespace LDPickupDoctor
             Row(e, label, delegate
             {
                 bool now = GUILayout.Toggle(e.Value, e.Value ? " on" : " off", GUILayout.Width(90f));
-                if (now != e.Value) { e.Value = now; MelonPreferences.Save(); }
+                if (now != e.Value) { e.Value = now; Settings.SaveSoon(); }
                 GUILayout.FlexibleSpace();
             });
         }
@@ -659,7 +715,7 @@ namespace LDPickupDoctor
                 float now = GUILayout.HorizontalSlider(e.Value, lo, hi, GUILayout.Width(240f));
                 GUILayout.Space(8f);
                 GUILayout.Label(now.ToString("0.00"), _mono, GUILayout.Width(60f));
-                if (!Mathf.Approximately(now, e.Value)) { e.Value = now; MelonPreferences.Save(); }
+                if (!Mathf.Approximately(now, e.Value)) { e.Value = now; Settings.SaveSoon(); }
                 GUILayout.FlexibleSpace();
             });
         }
@@ -671,7 +727,7 @@ namespace LDPickupDoctor
                 int now = Mathf.RoundToInt(GUILayout.HorizontalSlider(e.Value, lo, hi, GUILayout.Width(240f)));
                 GUILayout.Space(8f);
                 GUILayout.Label(now.ToString(), _mono, GUILayout.Width(60f));
-                if (now != e.Value) { e.Value = now; MelonPreferences.Save(); }
+                if (now != e.Value) { e.Value = now; Settings.SaveSoon(); }
                 GUILayout.FlexibleSpace();
             });
         }
@@ -766,7 +822,7 @@ namespace LDPickupDoctor
             }
             if (!removed) parts.Add(name);
             Settings.PickupNames.Value = string.Join(",", parts.ToArray());
-            MelonPreferences.Save();
+            Settings.SaveSoon();
         }
 
         // ---- skin ---------------------------------------------------------------------------------
