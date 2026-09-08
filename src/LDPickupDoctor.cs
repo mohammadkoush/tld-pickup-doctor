@@ -62,6 +62,7 @@ namespace LDPickupDoctor
 
             Hotkeys();
             Settings.FlushSaves();
+            ShotWatch.Tick();
 
             Transform player = null;
             try { player = GameManager.GetPlayerTransform(); } catch (System.Exception) { }
@@ -220,10 +221,14 @@ namespace LDPickupDoctor
                 bool mod = Modifier();
 
                 if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyWindow, KeyCode.F10)))
+                {
+                    ShotWatch.Note("the window key");
                     Ui.Toggle();
+                }
 
                 if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyToggleHighlight, KeyCode.F8)))
                 {
+                    ShotWatch.Note("the outline key");
                     Settings.HighlightEnabled.Value = !Settings.HighlightEnabled.Value;
                     if (!Settings.HighlightEnabled.Value) Highlight.Off();
                     Settings.SaveSoon();
@@ -232,13 +237,17 @@ namespace LDPickupDoctor
 
                 if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyTogglePickup, KeyCode.F9)))
                 {
+                    ShotWatch.Note("the pickup key");
                     Settings.PickupEnabled.Value = !Settings.PickupEnabled.Value;
                     Settings.SaveSoon();
                     Log.Info("auto pickup " + (Settings.PickupEnabled.Value ? "on" : "off"));
                 }
 
                 if (mod && Input.GetKeyDown(Settings.Key(Settings.KeyReport, KeyCode.F11)))
+                {
+                    ShotWatch.Note("the report key");
                     Diagnostics.Report(true);
+                }
 
                 if (mod && Input.GetKeyDown(Settings.Key(Settings.KeySpeedUp, KeyCode.PageUp)))
                     Cheats.NudgeSpeed(1);

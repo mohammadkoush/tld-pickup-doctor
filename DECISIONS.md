@@ -659,3 +659,34 @@ deleted - they are screenshots of his own play and that is his call, not this mo
 **This is the second time a hotkey collision has cost real time on this station** - the Green Hell
 notes carry the first. Worth stating as a rule: a mod hotkey on a bare key is a bet that the game
 does not want that key, and a mod cannot see the other side of that bet.
+
+---
+
+## 2026-09-08 - correcting the screenshot answer, and counting instead
+
+The first answer given was that a hotkey collision on F9 caused all 52 screenshots. **That was wrong,
+and it was wrong in the way this station has a rule about**: one coincidence was generalised into a
+cause. The toggle logged ONCE all evening. One press cannot make fifty-two files, and the person
+playing never pressed it deliberately.
+
+A second claim was also wrong: `screen_` was found in `GameAssembly.dll`, but the matches were
+`updateWhenOffscreen_`. A substring is not a string.
+
+**What is actually established:**
+
+- `_hi.png` IS a literal in the game's own metadata, alongside its screenshot pipeline messages
+  ("Screenshot done, wait for saving", "Disabling rende... while in Screenshot mode") and an
+  `InputManager.TakeHighResolutionScreenshot` entry point. The writer is the game.
+- This mod contains no screenshot code whatsoever - `EncodeToPNG`, `ScreenCapture`,
+  `CaptureScreenshot`, `WriteAllBytes`, "Screenshot": zero hits across every source file, and zero
+  in the built DLL. Neither do the other three mods installed.
+- What TRIGGERED fifty-two of them is unknown. The mod's Escape handling does open and close the
+  game's pause menu, and one screenshot does sit on that second, but that is again one coincidence
+  and it will not be treated as an answer.
+
+**So it gets counted rather than explained.** `ShotWatch` lists the desktop every two seconds and,
+when a new `screen_*.png` appears, writes a line saying what the mod last did and how long before -
+including "this mod has done nothing at all this session, it is not us", which is the outcome that
+would clear the mod entirely. It stops looking after a quiet hour and costs one directory listing.
+
+`Diagnostics.WatchDesktopScreenshots` turns it off.

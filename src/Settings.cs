@@ -155,6 +155,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> DiagEnabled;
         public static MelonPreferences_Entry<float> DiagReportSeconds;
         public static MelonPreferences_Entry<bool> DiagLogEveryRefusal;
+        public static MelonPreferences_Entry<bool> WatchScreenshots;
 
         public static void Load()
         {
@@ -395,6 +396,14 @@ namespace LDPickupDoctor
                     + "It sets the game's own pause flag and re-asserts it every frame; if the game "
                     + "keeps clearing it, the mod falls back to freezing time and says so in the log. "
                     + "Turn it off if you want to watch something happen while you change a setting.");
+
+            WatchScreenshots = _diag.CreateEntry("WatchDesktopScreenshots", true,
+                description: "Watch the desktop for new screen_*.png files and write down what "
+                    + "this mod was doing when each one appeared. It exists because 52 of them "
+                    + "turned up in one evening and nobody could say what made them: the file "
+                    + "name belongs to the game, the mod has no screenshot code at all, and one "
+                    + "coincidence with a hotkey explained three of the 52 at best. One folder "
+                    + "listing every two seconds, and it stops looking after a quiet hour.");
 
             DiagEnabled = _diag.CreateEntry("Enabled", true,
                 description: "Count what the sweep decided and write it to the MelonLoader log.");

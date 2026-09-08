@@ -132,6 +132,7 @@ namespace LDPickupDoctor
             try
             {
                 if (GameManager.IsMainMenuActive()) return;   // nothing to pause in a menu
+                ShotWatch.Note("pausing the game for the settings window");
                 _pausedWas = GameManager.m_IsPaused;
                 _havePaused = true;
                 _pauseLosses = 0;
@@ -247,6 +248,7 @@ namespace LDPickupDoctor
             {
                 if (InterfaceManager.IsPanelEnabled<Panel_PauseMenu>())
                 {
+                    ShotWatch.Note("closing the game's pause menu after Escape");
                     InterfaceManager.TrySetPanelEnabled<Panel_PauseMenu>(false);
                     // The timestamp is deliberately NOT cleared here. It is what keeps GuardUnpause
                     // running for the two seconds after this, and clearing it was the reason the

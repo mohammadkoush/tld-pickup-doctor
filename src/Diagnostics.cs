@@ -81,6 +81,8 @@ namespace LDPickupDoctor
             // SAY SO. A tally read back a week later must not have to guess why the numbers look
             // wrong; if a cheat was on, it is on the line above them.
             if (Cheats.AnyOn()) Log.Info("[cheats]" + Cheats.Active());
+            if (ShotWatch.Seen > 0)
+                Log.Info("[shots] " + ShotWatch.Seen + " screen_*.png have appeared on the desktop this session.");
 
             bool anyRepeat = false;
             foreach (KeyValuePair<string, int> kv in Log.Repeats())
