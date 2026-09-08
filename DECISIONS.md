@@ -779,3 +779,52 @@ encumbrance altogether, which is a different feature and nobody asked for it.
 Originals are stored per `Encumber` instance and written back when the cheat goes off, same
 discipline as the cap itself. The first capture logs all five of the game's own numbers, so the
 scaling can be checked rather than believed.
+
+---
+
+## 2026-09-08 - the Cheats page is hidden by default, for release
+
+His requirement, for a public upload: the Cheats page must be **off by default** and turned on
+deliberately from the first page anybody sees.
+
+That is a release decision rather than a taste one. The page exists because reaching a particular
+part of the game to test something would otherwise cost hundreds of hours of replaying a game he has
+already finished - a good reason for the person who built it, and a poor first impression for
+somebody downloading a mod called Pickup Doctor. A wall of god switches, open on arrival, changes
+what the mod appears to BE.
+
+So `Interface.ShowCheatsPage` defaults to false, the tab is **appended when asked for and simply
+absent otherwise** - the eight tabs before it never move either way, which is the same rule the tab
+order has always followed - and the toggle sits at the top of the Items page, the first thing the
+window shows.
+
+Two details that matter:
+
+- If the page is switched off while it is the page being looked at, the tab index would point past
+  the end of the list. It steps back to Interface rather than throwing.
+- **Hiding is not turning off.** Anything already running keeps running, and the Items page prints
+  "Cheats currently on:" with the list whenever the page is visible and something is active. A
+  switch that is on and invisible is exactly the silent state this mod refuses everywhere else.
+
+## 2026-09-08 - three more, from play
+
+**Fires now survive a night's sleep.** Stoves, outdoor fires, barbecues and fire drums were all out
+by morning with perpetual fire on. Sleeping does not run a fire through eight hours of updates - it
+fast-forwards and resolves the night in one call, so a pass that re-asserts a flag every few seconds
+never gets a turn in the middle. The fuel clock itself is held now: `m_MaxOnTODSeconds` is set to a
+year and `m_ElapsedOnTODSeconds` is wound back when it climbs past a tenth of that, so whatever the
+fast-forward computes, it starts from a fire with a year left rather than four hours.
+
+**Curing goes to near instant.** The dial's ceiling was 20, which turned a five day cure into six
+hours - fast, and still a wait. It reaches 100 now, and the top of the dial is a named position
+rather than a bigger number: at 99 or above the evolve time is set to a floor of 0.002 game days,
+about two minutes. Not zero, deliberately, because a zero duration sits inside the game's own
+progress arithmetic.
+
+**Free repair, and it is the one Harmony patch in this mod.** Every other cheat writes a field on an
+object it can reach, and that cannot work here: items in the pack are INACTIVE GameObjects, so
+`FindObjectsOfType` returns the rifle in hand and nothing else - while the whole point is clicking an
+item in the inventory. So the three questions the repair screen asks are patched at the source:
+`GetNumMaterialsRequired`, `GetRequiredGearUnits` and `GetDurationMinutes` answer zero while the
+switch is on and return the game's own answers when it is off. The game does the repairing; only the
+price it quotes changes.

@@ -113,6 +113,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> CheatNoSway;
         public static MelonPreferences_Entry<float> RateCuring;
         public static MelonPreferences_Entry<bool> CheatNoDegrade;
+        public static MelonPreferences_Entry<bool> CheatFreeRepair;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -148,6 +149,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> TooltipDelaySeconds;
         public static MelonPreferences_Entry<bool> WindowPausesCursor;
         public static MelonPreferences_Entry<bool> WindowPausesGame;
+        public static MelonPreferences_Entry<bool> ShowCheats;
         public static MelonPreferences_Entry<float> WindowX;
         public static MelonPreferences_Entry<float> WindowY;
 
@@ -328,6 +330,14 @@ namespace LDPickupDoctor
                 description: "Keep the item in hand at full condition. A firearm being fired, a hatchet being swung, a lamp being carried - whatever is held stops wearing out, and is topped back up to full the moment it is equipped. Items in the pack are untouched."
                     );
 
+            CheatFreeRepair = _cheats.CreateEntry("FreeRepair", false,
+                description: "Repair any item for nothing: no materials, no tools, no time. It "
+                    + "changes the price the repair screen quotes, not the repairing itself - "
+                    + "click the item, choose Repair, and it costs zero and finishes at once. "
+                    + "Works on items in the pack as well as in hand, which is why this one is a "
+                    + "patch rather than a field write: items in the pack are inactive objects "
+                    + "and cannot be reached any other way.");
+
             RateCuring = _cheats.CreateEntry("CuringSpeed", 1.0f,
                 description: "How fast hides, guts and anything else that cures over time get "
                     + "there. 1.00 is off, and ABOVE 1 is faster - the opposite direction to "
@@ -402,6 +412,22 @@ namespace LDPickupDoctor
                     + "dragged, so it opens where it was left rather than back in the corner.");
             WindowY = _iface.CreateEntry("WindowY", 60f,
                 description: "Where the window sits, down.");
+            // HIDDEN BY DEFAULT, AND THAT IS A RELEASE DECISION RATHER THAN A TASTE ONE.
+            //
+            // The Cheats page exists because reaching a particular part of the game to test
+            // something would otherwise cost hundreds of hours. That is a good reason for the
+            // person who built it and a poor first impression for anyone downloading a mod
+            // called Pickup Doctor: a page of god switches, open on arrival, changes what the
+            // mod appears to BE.
+            //
+            // So it is off, the tab does not exist until it is asked for, and asking is one
+            // toggle on the first page anybody sees.
+            ShowCheats = _iface.CreateEntry("ShowCheatsPage", false,
+                description: "Show the Cheats page. Off by default: those switches remove the "
+                    + "game's price rather than its repetition, which is the opposite of what the "
+                    + "rest of this mod is for. Turning this off hides the page, it does not turn "
+                    + "off anything already running - the log names anything still on.");
+
             WindowPausesGame = _iface.CreateEntry("PauseGame", true,
                 description: "Pause the game while the window is open, and resume on the way out. "
                     + "It sets the game's own pause flag and re-asserts it every frame; if the game "

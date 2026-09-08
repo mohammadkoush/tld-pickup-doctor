@@ -81,6 +81,11 @@ namespace LDPickupDoctor
 
         // ---- fires -------------------------------------------------------------------------------
         private static readonly Dictionary<int, bool> _origPerpetual = new Dictionary<int, bool>();
+        private static readonly Dictionary<int, float> _origMaxOn = new Dictionary<int, float>();
+
+        /// A year in seconds. Large enough that no night of sleep reaches it, small enough that it is
+        /// still a number rather than an infinity sitting inside somebody else's arithmetic.
+        private const float YearOfSeconds = 31536000f;
         private static float _nextFireScan;
         private static readonly List<Fire> _fires = new List<Fire>();
         private static float _fireLifeWas = -1f;
@@ -242,6 +247,7 @@ namespace LDPickupDoctor
             if (!Mathf.Approximately(Settings.RateCuring.Value, 1f))
                 s += " curing=" + Settings.RateCuring.Value.ToString("0.00") + "x(" + CuringHeld + ")";
             if (Settings.CheatNoDegrade.Value) s += " noDegrade(" + RepairsMade + ")";
+            if (Settings.CheatFreeRepair.Value) s += " freeRepair(" + FreeRepair.Uses + ")";
             if (Settings.CheatNoSway.Value) s += " noSway(guns=" + _swayHeld + " weapons=" + _weaponsHeld + ")";
             return s;
         }
@@ -256,6 +262,7 @@ namespace LDPickupDoctor
                 || Settings.CheatNoRecoil.Value
                 || Settings.CheatNoSway.Value
                 || Settings.CheatNoDegrade.Value
+                || Settings.CheatFreeRepair.Value
                 || !Mathf.Approximately(Settings.RateCuring.Value, 1f)
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
@@ -946,7 +953,13 @@ namespace LDPickupDoctor
 
         private static void Curing()
         {
-            float dial = Mathf.Clamp(Settings.RateCuring.Value, 0.05f, 20f);
+            // The ceiling was 20, which turned a five day cure into six hours - fast, and still a
+            // wait. 100 makes it about seventy minutes, and the top of the dial is now a named
+            // position rather than a bigger number: at 99 or above the time is set to a floor of
+            // 0.002 game days, which is a couple of minutes. Not zero, deliberately - a zero
+            // duration sits inside the game's own progress arithmetic and division is unforgiving.
+            float dial = Mathf.Clamp(Settings.RateCuring.Value, 0.05f, 100f);
+            bool instant = dial >= 99f;
             bool neutral = Mathf.Approximately(dial, 1f);
 
             if (neutral)
@@ -976,7 +989,9 @@ namespace LDPickupDoctor
                             + baseline.ToString("0.00") + " days for the first item seen, divided by "
                             + "the dial from here.");
                     }
-                    e.m_TimeToEvolveGameDays = baseline / dial;
+                    e.m_TimeToEvolveGameDays = instant
+                        ? 0.002f
+                        : baseline / dial;
                 }
                 CuringHeld = items.Count;
             }
@@ -1820,10 +1835,29 @@ namespace LDPickupDoctor
                     if (!_origPerpetual.ContainsKey(id))
                     {
                         _origPerpetual[id] = f.m_IsPerpetual;
+                        _origMaxOn[id] = f.m_MaxOnTODSeconds;
                         Log.OnceInfo("fire-on", "perpetual fire on - the game's own m_IsPerpetual flag "
                             + "is being set on burning fires, and cleared again when you turn this off.");
                     }
                     f.m_IsPerpetual = true;
+
+                    // A NIGHT'S SLEEP IS NOT A SEQUENCE OF FRAMES, WHICH IS WHY THE FLAG ALONE LOST.
+                    //
+                    // Reported from play: stoves, outdoor fires, barbecues and fire drums are all out
+                    // by morning. Sleeping does not run the fire through eight hours of updates - it
+                    // fast-forwards, resolving the whole night in one call, and a pass that only
+                    // re-asserts a flag every few seconds never gets a turn in the middle of that.
+                    //
+                    // So the fuel clock itself is held rather than watched: the maximum burn is set
+                    // to a year of seconds and the elapsed time is wound back whenever it climbs past
+                    // a tenth of it. Whatever arithmetic the fast-forward does, it starts from a fire
+                    // that has a year left rather than four hours.
+                    f.m_MaxOnTODSeconds = YearOfSeconds;
+                    if (f.m_ElapsedOnTODSeconds > YearOfSeconds * 0.1f)
+                    {
+                        f.m_ElapsedOnTODSeconds = 0f;
+                        f.m_ElapsedOnTODSecondsUnmodified = 0f;
+                    }
 
                     float life = f.GetRemainingLifeTimeHours();
                     if (nearestLife < 0f || life < nearestLife) nearestLife = life;
@@ -1871,14 +1905,18 @@ namespace LDPickupDoctor
                 {
                     Fire f = all[i];
                     if (f == null) continue;
+                    int fid = f.GetInstanceID();
                     bool was;
-                    if (_origPerpetual.TryGetValue(f.GetInstanceID(), out was)) { f.m_IsPerpetual = was; n++; }
+                    if (_origPerpetual.TryGetValue(fid, out was)) { f.m_IsPerpetual = was; n++; }
+                    float maxWas;
+                    if (_origMaxOn.TryGetValue(fid, out maxWas)) f.m_MaxOnTODSeconds = maxWas;
                 }
             }
             catch (System.Exception) { }
 
             int held = _origPerpetual.Count;
             _origPerpetual.Clear();
+            _origMaxOn.Clear();
             _fires.Clear();
             _fireLifeWas = -1f;
             _fireLifeFalling = 0;

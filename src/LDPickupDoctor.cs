@@ -40,6 +40,7 @@ namespace LDPickupDoctor
         {
             Log.Attach(LoggerInstance);
             Settings.Load();
+            FreeRepair.Apply(HarmonyInstance);
             Log.Info("LD Pickup Doctor 0.1.0 ready. " + Settings.KeyWindow.Value + " opens the settings window.");
             Log.Info("grind is removed; price is not. Auto-pickup takes clicking away, never weight.");
         }

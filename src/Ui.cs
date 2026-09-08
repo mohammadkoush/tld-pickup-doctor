@@ -25,10 +25,24 @@ namespace LDPickupDoctor
     {
         public static bool Open;
 
-        private static readonly string[] Tabs =
+        // The Cheats page is APPENDED, never inserted, and only when it is asked for - so the eight
+        // tabs before it never move whether it is there or not. Same rule as always: an option that
+        // changes position cannot be found by memory.
+        private static readonly string[] BaseTabs =
+        {
+            "Items", "Pickup", "Highlight", "Colours", "Grind", "Keys", "Advanced", "Interface"
+        };
+
+        private static readonly string[] TabsWithCheats =
         {
             "Items", "Pickup", "Highlight", "Colours", "Grind", "Keys", "Advanced", "Interface", "Cheats"
         };
+
+        private static string[] Tabs
+        {
+            get { return Settings.ShowCheats.Value ? TabsWithCheats : BaseTabs; }
+        }
+
         private static int _tab;
 
         private static Rect _rect = new Rect(60f, 60f, 720f, 560f);
@@ -386,6 +400,10 @@ namespace LDPickupDoctor
             GUILayout.EndHorizontal();
             GUILayout.Space(4f);
 
+            // If the Cheats page is switched off while it is the page being looked at, the tab
+            // index would point past the end of the list. Step back to Interface rather than throw.
+            if (_tab >= Tabs.Length) _tab = Tabs.Length - 1;
+
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             switch (_tab)
             {
@@ -417,6 +435,15 @@ namespace LDPickupDoctor
 
         private static void ItemsTab()
         {
+            Toggle(Settings.ShowCheats, "Show the Cheats page");
+            if (Settings.ShowCheats.Value && Cheats.AnyOn())
+            {
+                GUI.color = new Color(1f, 0.72f, 0.35f);
+                GUILayout.Label("Cheats currently on:" + Cheats.Active(), _label);
+                GUI.color = Color.white;
+            }
+            GUILayout.Space(8f);
+
             Note("Every item the sweep has seen this session, and HOW MANY of them - distinct "
                + "objects, not how many times it looked. This is the list to add names from: a name "
                + "here is guaranteed to match, and one typed from memory is not. Green means it is "
@@ -626,6 +653,7 @@ namespace LDPickupDoctor
             Toggle(Settings.CheatNoRecoil, "No firearm recoil");
             Toggle(Settings.CheatNoSway, "No aim sway");
             Toggle(Settings.CheatNoDegrade, "Held item never wears out");
+            Toggle(Settings.CheatFreeRepair, "Repair anything for free");
 
             GUILayout.Space(10f);
             GUI.color = new Color(0.75f, 0.85f, 0.95f);
@@ -638,7 +666,7 @@ namespace LDPickupDoctor
             Slider(Settings.RateThirst, 0f, 3f, "Thirst - how fast you dry out");
             Slider(Settings.RateHunger, 0f, 3f, "Food - how fast calories burn");
             Slider(Settings.RateStamina, 0f, 3f, "Stamina - how fast sprinting drains it");
-            Slider(Settings.RateCuring, 1f, 20f, "Curing speed - hides and guts (higher is faster)");
+            Slider(Settings.RateCuring, 1f, 100f, "Curing speed - hides and guts (100 is near instant)");
             Slider(Settings.RateHeldFuel, 0.05f, 3f, "Item fuel - lamp, torch, flare, battery");
             Toggle(Settings.FuelIncludesPlaced, "Fuel dial covers placed items too");
             GUILayout.BeginHorizontal();
