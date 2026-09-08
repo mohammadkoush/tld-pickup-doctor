@@ -987,11 +987,29 @@ namespace LDPickupDoctor
 
                 int size = gun.m_ClipSize;
                 if (size <= 0) return;
-                if (gun.m_RoundsInClip >= size) return;
 
-                // Fill the contents first, then the count. The other order leaves a frame in which
-                // the gun believes it holds rounds it cannot describe.
+                // NO EARLY RETURN ON m_RoundsInClip, AND THAT WAS THE BUG.
+                //
+                // The first build read that field, found it already equal to the clip size, and went
+                // home. The log said so for five minutes while rounds were being fired:
+                //
+                //     ammo(2 topups)   ... ammo(2 topups)   ... ammo(2 topups)
+                //
+                // Two top-ups at the start and never again. The count was not moving because the
+                // game does not spend a round by decrementing that field - it takes the round out of
+                // m_Clip, the list that says what each round IS. So the count stayed full, the list
+                // emptied, and the guard blocked every refill.
+                //
+                // Both are now checked and both are written, every frame, with no shortcut. It costs
+                // two integer comparisons and it cannot be fooled by whichever one the game happens
+                // to use this patch.
                 Il2CppSystem.Collections.Generic.List<int> clip = gun.m_Clip;
+                int clipCount = clip == null ? size : clip.Count;
+                int rounds = gun.m_RoundsInClip;
+                if (clipCount >= size && rounds >= size && gun.m_SpentCasingsInClip == 0) return;
+
+                // Contents first, then the count. The other order leaves a frame in which the gun
+                // believes it holds rounds it cannot describe.
                 if (clip != null)
                 {
                     int pattern = clip.Count > 0 ? clip[clip.Count - 1] : 0;
@@ -1001,6 +1019,13 @@ namespace LDPickupDoctor
                 gun.m_SpentCasingsInClip = 0;
                 gun.m_HasMisfired = false;
                 _ammoTopUps++;
+
+                if (_ammoTopUps <= 3)
+                {
+                    Log.Info("ammo topped up: the clip list held " + clipCount + " and the count said "
+                        + rounds + ", against a clip size of " + size
+                        + ". Both are set to full now. (Said for the first three only.)");
+                }
             }
             catch (System.Exception e)
             {

@@ -460,3 +460,29 @@ figures (about 1.4 m/s walking, 3.5 sprinting) beside it for comparison.
 is put down, not sixty a second while it is moving. Restored on the first open rather than at load,
 because preferences are read before `Screen` has a size to clamp against, and a window restored onto
 a monitor that is no longer there cannot be reached.
+
+---
+
+## 2026-09-08 - the ammo cheat stopped after two top-ups
+
+"Ammo is still being consumed." The log had counted it, which is the only reason this took a minute
+rather than an evening:
+
+    [cheats] ... ammo(2 topups) ...        01:44
+    [cheats] ... ammo(2 topups) ...        01:48
+
+Two top-ups at the start and none in the four minutes of shooting after. No exceptions. So the code
+was reaching its guard and returning, every frame.
+
+The guard was `if (gun.m_RoundsInClip >= size) return;`. **The game does not spend a round by
+decrementing that field** - it removes the round from `m_Clip`, the list that records what each
+round in the clip actually is. So the count stayed full, the list emptied, and the guard blocked
+every refill after the first fill.
+
+Both are checked and both are written now, every frame, with no shortcut - two integer comparisons,
+and it cannot be fooled by whichever of the two the game happens to use in a future patch. The first
+three top-ups print the numbers they found, so the next time this misbehaves the log already says
+which counter moved.
+
+The lesson is the one this project keeps relearning: a counter that does not move is evidence, and
+`ammo(2 topups)` sitting still through a firefight said exactly where the fault was.
