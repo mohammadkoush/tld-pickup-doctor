@@ -112,6 +112,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> CheatNoRecoil;
         public static MelonPreferences_Entry<bool> CheatNoSway;
         public static MelonPreferences_Entry<float> RateCuring;
+        public static MelonPreferences_Entry<float> RateDaylight;
         public static MelonPreferences_Entry<bool> CheatNoDegrade;
         public static MelonPreferences_Entry<bool> CheatFreeRepair;
 
@@ -337,6 +338,14 @@ namespace LDPickupDoctor
                     + "Works on items in the pack as well as in hand, which is why this one is a "
                     + "patch rather than a field write: items in the pack are inactive objects "
                     + "and cannot be reached any other way.");
+
+            RateDaylight = _cheats.CreateEntry("DaylightBalance", 1.0f,
+                description: "Longer days and shorter nights, on one dial. The day length is "
+                    + "multiplied by it and the night length divided by it, so 2.00 is twice the "
+                    + "daylight and half the dark while a full cycle still takes about as long as "
+                    + "it did. 1.00 is off and puts both back. One dial rather than two because "
+                    + "the thing wanted is the ratio - two sliders drift into a forty hour day "
+                    + "nobody asked for.");
 
             RateCuring = _cheats.CreateEntry("CuringSpeed", 1.0f,
                 description: "How fast hides, guts and anything else that cures over time get "

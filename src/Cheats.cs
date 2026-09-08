@@ -244,6 +244,8 @@ namespace LDPickupDoctor
             if (Settings.CheatUnlimitedAmmo.Value) s += " ammo(" + _ammoTopUps + " topups)";
             if (Settings.CheatPerpetualFire.Value) s += " perpetualFire(" + _fires.Count + ")";
             if (Settings.CheatNoRecoil.Value) s += " noRecoil(guns=" + _gunsHeld + " shooters=" + _recoilHeld + ")";
+            if (!Mathf.Approximately(Settings.RateDaylight.Value, 1f))
+                s += " daylight=" + Settings.RateDaylight.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateCuring.Value, 1f))
                 s += " curing=" + Settings.RateCuring.Value.ToString("0.00") + "x(" + CuringHeld + ")";
             if (Settings.CheatNoDegrade.Value) s += " noDegrade(" + RepairsMade + ")";
@@ -264,6 +266,7 @@ namespace LDPickupDoctor
                 || Settings.CheatNoDegrade.Value
                 || Settings.CheatFreeRepair.Value
                 || !Mathf.Approximately(Settings.RateCuring.Value, 1f)
+                || !Mathf.Approximately(Settings.RateDaylight.Value, 1f)
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
@@ -580,6 +583,7 @@ namespace LDPickupDoctor
             Fires();
             Rates();
             PlacedFuel();
+            DayNight();
             BuffTimers();
             Recoil();
             Sway();
@@ -1142,6 +1146,78 @@ namespace LDPickupDoctor
             _nextRecoilScan = 0f;
             Log.Info("no recoil off - " + guns + " of " + gunsHeld + " gun(s) and " + n + " of "
                 + held + " shooter(s) got their kick back.");
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // LONGER DAYS, SHORTER NIGHTS
+        //
+        // TimeOfDay keeps the two halves as separate numbers - m_DayDurationInMinutes and
+        // m_NightDurationInMinutes - which is what makes one dial able to do both at once: the day is
+        // multiplied and the night divided by the same figure. At 2.00 the day is twice as long and
+        // the night half as long, and a full cycle still takes roughly the time it used to.
+        //
+        // ONE DIAL RATHER THAN TWO, because the thing actually wanted is the ratio. Two sliders would
+        // let the pair drift into a 40-hour day nobody asked for, and would need a third number to
+        // say what a "day" now means.
+        //
+        // These are ints, so the write is rounded and floored at one minute - a zero-length night is
+        // a division waiting to happen inside somebody else's code.
+        private static bool _haveDayNight;
+        private static int _origDayMinutes;
+        private static int _origNightMinutes;
+        public static string DayNightNow = "";
+
+        private static void DayNight()
+        {
+            TimeOfDay tod = null;
+            try { tod = GameManager.GetTimeOfDayComponent(); } catch (System.Exception) { }
+            if (tod == null) return;
+
+            float dial = Mathf.Clamp(Settings.RateDaylight.Value, 0.25f, 4f);
+            bool neutral = Mathf.Approximately(dial, 1f);
+
+            try
+            {
+                if (neutral)
+                {
+                    if (_haveDayNight)
+                    {
+                        tod.m_DayDurationInMinutes = _origDayMinutes;
+                        tod.m_NightDurationInMinutes = _origNightMinutes;
+                        _haveDayNight = false;
+                        Log.Info("day length back to the game's own " + _origDayMinutes
+                            + " minutes of day and " + _origNightMinutes + " of night.");
+                    }
+                    else
+                    {
+                        // Neutral means the game's numbers ARE the baseline, so they are tracked
+                        // rather than remembered - the same discipline the survival rates use, and
+                        // for the same reason: never re-baseline from a value we wrote ourselves.
+                        _origDayMinutes = tod.m_DayDurationInMinutes;
+                        _origNightMinutes = tod.m_NightDurationInMinutes;
+                    }
+                    DayNightNow = "";
+                    return;
+                }
+
+                if (!_haveDayNight)
+                {
+                    _haveDayNight = true;
+                    Log.Info("day length dial on - the game's own cycle is " + _origDayMinutes
+                        + " minutes of day and " + _origNightMinutes + " of night.");
+                }
+
+                int day = Mathf.Max(1, Mathf.RoundToInt(_origDayMinutes * dial));
+                int night = Mathf.Max(1, Mathf.RoundToInt(_origNightMinutes / dial));
+                tod.m_DayDurationInMinutes = day;
+                tod.m_NightDurationInMinutes = night;
+                DayNightNow = day + "m day / " + night + "m night";
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("daynight", "the day and night lengths could not be set: " + e.Message
+                    + " - retried every sweep, and the dial stays where it was put.");
+            }
         }
 
         /// <summary>Every timed buff and where its clock stands, for the window.</summary>

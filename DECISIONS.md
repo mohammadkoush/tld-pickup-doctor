@@ -849,3 +849,24 @@ honest way to spend nothing is for the original never to run.
 Six patches in total now, all gated on the switch: with free repair off they return exactly what the
 game returns, so the patches are inert rather than absent. That is what lets the switch be flipped
 without restarting.
+
+---
+
+## 2026-09-08 - longer days and shorter nights, on one dial
+
+`TimeOfDay` keeps the two halves as separate numbers - `m_DayDurationInMinutes` and
+`m_NightDurationInMinutes` - which is what lets a single dial do both at once: the day is multiplied
+by it and the night divided by it. At 2.00 the day is twice as long and the night half as long, and
+a full cycle still takes roughly the time it did.
+
+**One dial rather than two, deliberately.** The thing actually wanted is the ratio. Two sliders would
+let the pair drift into a forty hour day nobody asked for, and would then need a third number
+somewhere to say what a "day" even means.
+
+Both are ints, so the write is rounded and floored at one minute - a zero-length night is a division
+waiting to happen inside somebody else's code. The window shows the resulting minutes beside the
+slider, because "1.75x" means nothing and "210m day / 69m night" means everything.
+
+Same baseline discipline as the survival rates: while the dial sits at 1.00 the game's own numbers
+are tracked as the baseline, and the moment it leaves 1.00 that tracking stops - so a value this mod
+wrote can never become the number it thinks the game shipped.
