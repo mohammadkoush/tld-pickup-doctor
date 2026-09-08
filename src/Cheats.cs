@@ -19,6 +19,7 @@
 
 using System.Collections.Generic;
 using Il2Cpp;
+using Il2CppTLD.Gear;
 using Il2CppTLD.IntBackedUnit;
 using UnityEngine;
 
@@ -95,6 +96,7 @@ namespace LDPickupDoctor
             if (!Mathf.Approximately(Settings.RateThirst.Value, 1f)) s += " thirst=" + Settings.RateThirst.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateHunger.Value, 1f)) s += " hunger=" + Settings.RateHunger.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateStamina.Value, 1f)) s += " stamina=" + Settings.RateStamina.Value.ToString("0.00") + "x";
+            if (!Mathf.Approximately(Settings.RateHeldFuel.Value, 1f)) s += " heldFuel=" + Settings.RateHeldFuel.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.CheatSpeed.Value, 1f))
                 s += " speed=" + Settings.CheatSpeed.Value.ToString("0.00") + "x";
             if (Settings.CheatInstantHarvest.Value) s += " instantHarvest";
@@ -115,14 +117,135 @@ namespace LDPickupDoctor
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
                 || !Mathf.Approximately(Settings.RateThirst.Value, 1f)
                 || !Mathf.Approximately(Settings.RateHunger.Value, 1f)
-                || !Mathf.Approximately(Settings.RateStamina.Value, 1f);
+                || !Mathf.Approximately(Settings.RateStamina.Value, 1f)
+                || !Mathf.Approximately(Settings.RateHeldFuel.Value, 1f);
         }
 
-        /// <summary>Every frame. Only the two that have to be: speed and the clip.</summary>
+        /// <summary>Every frame. Only the three that have to be: speed, the clip, and the held item.</summary>
         public static void FastTick()
         {
             Speed();
             Ammo();
+            HeldFuel();
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // FUEL DRAIN IN THE ITEM BEING HELD
+        //
+        // Four different fields, because the game measures four different things and none of them is
+        // "fuel":
+        //
+        //   KeroseneLampItem.m_FuelBurnPerHour   litres an hour        - scaled UP to drain faster
+        //   TorchItem.m_BurnLifetimeMinutes      total minutes of life - scaled DOWN to drain faster
+        //   FlareItem.m_BurnLifetimeMinutes      the same
+        //   FlashlightItem.m_LowBeamDuration     seconds of battery    - the same
+        //
+        // So the dial cannot simply be multiplied through: a rate and a lifetime move in opposite
+        // directions. Below 1.00 always means "lasts longer", whichever field is behind it, which is
+        // the only thing worth being consistent about here.
+        //
+        // Held items only, as asked. A lantern left burning on a table is somebody's light source in
+        // a place they chose, not the thing in hand, and quietly doubling its life is a different
+        // feature that nobody switched on.
+        // ------------------------------------------------------------------------------------------
+        private static readonly Dictionary<int, float> _origFuel = new Dictionary<int, float>();
+        private static readonly HashSet<int> _fuelScaled = new HashSet<int>();
+
+        private static void HeldFuel()
+        {
+            float m = Mathf.Clamp(Settings.RateHeldFuel.Value, 0.01f, 5f);
+
+            GearItem held = null;
+            try
+            {
+                PlayerManager pm = GameManager.GetPlayerManagerComponent();
+                if (pm != null) held = pm.m_ItemInHands;
+            }
+            catch (System.Exception) { }
+            if (held == null) return;
+
+            try
+            {
+                KeroseneLampItem lamp = held.m_KeroseneLampItem;
+                if (lamp != null)
+                {
+                    // A rate: multiply. Litres per hour goes up when the dial goes up.
+                    float litres = Sweep.Litres(lamp.m_FuelBurnPerHour);
+                    float want = FuelScale(lamp.GetInstanceID(), litres, m);
+                    lamp.m_FuelBurnPerHour = ItemLiquidVolume.FromLiters(want);
+                }
+            }
+            catch (System.Exception e) { FuelComplain("lamp", e); }
+
+            try
+            {
+                TorchItem torch = held.m_TorchItem;
+                if (torch != null)
+                {
+                    // A lifetime: divide. More minutes of life is a slower drain.
+                    float mins = torch.m_BurnLifetimeMinutes;
+                    torch.m_BurnLifetimeMinutes = FuelScale(torch.GetInstanceID(), mins, 1f / m);
+                }
+            }
+            catch (System.Exception e) { FuelComplain("torch", e); }
+
+            try
+            {
+                FlareItem flare = held.m_FlareItem;
+                if (flare != null)
+                {
+                    float mins = flare.m_BurnLifetimeMinutes;
+                    flare.m_BurnLifetimeMinutes = FuelScale(flare.GetInstanceID(), mins, 1f / m);
+                }
+            }
+            catch (System.Exception e) { FuelComplain("flare", e); }
+
+            try
+            {
+                FlashlightItem torch = held.m_FlashlightItem;
+                if (torch != null)
+                {
+                    int id = torch.GetInstanceID();
+                    torch.m_LowBeamDuration = FuelScale(id * 2, torch.m_LowBeamDuration, 1f / m);
+                    torch.m_HighBeamDuration = FuelScale(id * 2 + 1, torch.m_HighBeamDuration, 1f / m);
+                }
+            }
+            catch (System.Exception e) { FuelComplain("flashlight", e); }
+        }
+
+        /// <summary>
+        /// The same baseline discipline as Scale, keyed by instance because these are real objects
+        /// rather than singletons: remember the base while the dial is neutral, restore it on the way
+        /// back to neutral, and never compute a new value from a value already written here.
+        /// </summary>
+        private static float FuelScale(int id, float live, float multiplier)
+        {
+            if (Mathf.Approximately(multiplier, 1f))
+            {
+                if (_fuelScaled.Contains(id))
+                {
+                    _fuelScaled.Remove(id);
+                    float restored = _origFuel[id];
+                    _origFuel.Remove(id);
+                    return restored;
+                }
+                return live;
+            }
+
+            float baseline;
+            if (!_origFuel.TryGetValue(id, out baseline))
+            {
+                baseline = live;
+                _origFuel[id] = baseline;
+            }
+            _fuelScaled.Add(id);
+            return baseline * multiplier;
+        }
+
+        private static void FuelComplain(string what, System.Exception e)
+        {
+            Log.OnceWarn("fuel-" + what, "the " + what + " burn rate could not be set: " + e.Message
+                + " - it is retried on the next frame and the dial stays where it was put.");
         }
 
         /// <summary>Once per sweep. The ones that walk lists.</summary>

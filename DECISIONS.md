@@ -342,3 +342,32 @@ game's price exactly where it was. This page removes the price."
 
 Addressing the reader as "you" in documentation is fine and normal. What is not fine is text that
 only makes sense to the author.
+
+---
+
+## 2026-09-08 - fuel drain in the held item
+
+A sixth rate dial: `Cheats.RateHeldFuel`. Below 1.00 the item in hand lasts longer, above 1.00 it
+burns quicker, 1.00 is off.
+
+Four fields, because the game measures four different things and none of them is called fuel:
+
+    KeroseneLampItem.m_FuelBurnPerHour   litres an hour        - a RATE, multiplied
+    TorchItem.m_BurnLifetimeMinutes      total minutes of life - a LIFETIME, divided
+    FlareItem.m_BurnLifetimeMinutes      the same
+    FlashlightItem.m_LowBeamDuration     seconds of battery    - the same, both beams
+
+A rate and a lifetime move in opposite directions, so the dial cannot simply be multiplied through.
+What is kept consistent is the only thing that matters to a reader: below 1.00 always means "lasts
+longer", whichever field is behind it.
+
+`KeroseneLampItem` lives in `Il2CppTLD.Gear`, not `Il2Cpp`, and its fuel is an
+`Il2CppTLD.IntBackedUnit.ItemLiquidVolume` - `Sweep.Litres` converts it the same way `Sweep.KG`
+handles `ItemWeight`.
+
+**Held items only, deliberately.** A lantern left burning on a table is a light source somebody put
+somewhere on purpose; doubling its life is a different feature that nobody switched on.
+
+Baselines are keyed by instance id in `FuelScale`, the same discipline as `Scale` and for the same
+reason. None of these fields is serialised into a save - they come back from the game's own data on
+the next launch - so a value left scaled by an item that never returns to the hand costs nothing.

@@ -355,5 +355,12 @@ namespace LDPickupDoctor
             try { return w / ItemWeight.FromKilograms(1f); }
             catch (System.Exception) { return 0f; }
         }
+
+        /// <summary>Litres out of the game's int-backed volume unit, the same way KG works.</summary>
+        public static float Litres(Il2CppTLD.IntBackedUnit.ItemLiquidVolume v)
+        {
+            try { return v / Il2CppTLD.IntBackedUnit.ItemLiquidVolume.FromLiters(1f); }
+            catch (System.Exception) { return 0f; }
+        }
     }
 }

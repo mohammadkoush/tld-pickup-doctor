@@ -168,8 +168,9 @@ outline colours across a map you have to walk.
 | Thirst rate | Scales `Thirst.m_ThirstIncreasePerDay` awake and resting. | `1.00` |
 | Food rate | Scales all ten `Hunger.m_CalorieBurnPerHour*` figures together. | `1.00` |
 | Stamina rate | Scales `PlayerMovement.m_SprintStaminaUsagePerSecond`; at the bottom it uses the game's own unlimited-sprint flag. | `1.00` |
+| Held item fuel | Lamp fuel, torch and flare burn time, flashlight battery - for the item in hand only. | `1.00` |
 
-The five rate dials go **both ways** - below 1 is gentler, above 1 is harsher - so they are as much
+The six rate dials go **both ways** - below 1 is gentler, above 1 is harsher - so they are as much
 a difficulty dial as a cheat. Each scales the game's own per-hour numbers rather than replacing them
 with one figure of ours, which keeps the relationships Hinterland balanced: fatigue still builds
 faster sprinting than standing, and cold still bites harder the colder it gets.

@@ -118,6 +118,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> RateThirst;
         public static MelonPreferences_Entry<float> RateHunger;
         public static MelonPreferences_Entry<float> RateStamina;
+        public static MelonPreferences_Entry<float> RateHeldFuel;
 
         // ---- keys ------------------------------------------------------------------------------
         public static MelonPreferences_Entry<string> KeyWindow;
@@ -293,6 +294,13 @@ namespace LDPickupDoctor
                 description: "How fast sprinting drains stamina. 1.00 is off. At the very bottom of "
                     + "the slider it switches on the game's own unlimited-sprint flag instead of "
                     + "dividing by something near zero.");
+
+            RateHeldFuel = _cheats.CreateEntry("HeldFuelRate", 1.0f,
+                description: "How fast the item in hand uses itself up: lamp fuel, torch and flare "
+                    + "burn time, flashlight battery. 1.00 is off, below 1 lasts longer, above 1 "
+                    + "burns quicker. It changes only the item being held, so a lantern left burning "
+                    + "on a table is untouched, and nothing here is written into a save - the numbers "
+                    + "come back from the game's own data on the next launch.");
 
             KeySpeedUp = _keys.CreateEntry("SpeedUp", "PageUp",
                 description: "Raise the speed multiplier by SpeedStep.");
