@@ -152,3 +152,44 @@ what it calls instead of trusting it.
 `Could not load file or assembly 'ModSettings, Version=2.2.5.0'`. `UserLibs` is empty. That mod
 needs `ModSettings.dll` dropped into `TheLongDark\UserLibs`. Not this mod's problem, but it is in
 the same log and would otherwise look like ours.
+
+---
+
+## 2026-09-08 - first in-world run, and what it corrected
+
+Pickup, outlines and the sweep all worked on the first run. Three things came back from it.
+
+**The F10 window opened blank.** `GUI.Window` takes a `GUI.WindowFunction`, which under IL2CPP is a
+generated Il2Cpp delegate, not a managed one. The cast compiled, the call did not throw, and the
+body was simply never invoked - so the frame drew and the contents did not, with nothing in the log
+because nothing failed. Replaced with a `GUILayout.BeginArea` panel plus hand-written dragging,
+which needs no delegate at all. The panel now logs once that its body ran, so "blank again" is a
+question the log answers.
+
+Also removed a write to `GUI.skin.window.normal.background`. That is a process-wide global; one mod
+tinting it is how every other IMGUI window in the game turns black.
+
+**`CannotInteract=2259` against `Success=3` in one minute.** Counted before concluding: those were
+fixtures and props on the gear layer being state-checked before anything asked whether he wanted
+them. `Sweep.Judge` now runs the name gate before the state gates, so the tally reports on listed
+items and the dominant number means something.
+
+**The world-live line wrote itself seven times in three minutes**, because The Long Dark initialises
+a scene per interior and transition. Rate limited to once every two minutes.
+
+**New: a save key.** `Ctrl` and `S` calls `GameManager.SaveGameAndDisplayHUDMessage()`, guarded by
+`SaveIsBlockedDueToRestoreGame()` and `SaveGameSystem.IsAsyncSaveRunning()`, with a cooldown. The
+cooldown is deliberately **not** stamped when a save fails, so a failed press retries at once rather
+than being told to wait for a save that never happened.
+
+## 2026-09-08 - the 6.9 GB log, which was not ours
+
+`MelonLoader\Latest.log` had reached **6.89 GB**. `ContainerRespawnTweaker` threw a
+`FileNotFoundException` for `ModSettings, Version=2.2.5.0` on every single `Container.UpdateContainer`
+call, and each one wrote a full stack trace. By count this was by far the loudest fault on the
+machine and it was not in this mod at all.
+
+Fixed by installing the library it wanted: **ModSettings 2.2.5** from
+`DigitalzombieTLD/ModSettings` (the maintained fork; the original `zeobviouslyfakeacc` repo is
+archived at 1.9.0). It is itself a MelonMod, so it goes in `Mods\`, not `UserLibs\`. Confirmed:
+four mods load, no errors, log back to kilobytes.

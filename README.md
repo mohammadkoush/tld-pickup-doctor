@@ -143,6 +143,7 @@ sweeping down a column covers the row you were trying to read. Set it to `0` for
 | `F9` | Auto pickup on or off. |
 | `F10` | The settings window. |
 | `F11` | Write the diagnostic report to the log now. |
+| `Ctrl` and `S` | Save the game where you stand, through the game's own save and its own message. |
 
 ---
 
