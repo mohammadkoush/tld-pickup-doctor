@@ -509,3 +509,39 @@ It is one line away if it is ever wanted.
 Confirmed by testing this session: the fuel dial survives a reload, which is expected - the burn
 rates are prefab data rebuilt from the game's own values on load, and the mod re-applies the dial
 on the next sweep.
+
+---
+
+## 2026-09-08 - recoil was on the gun, not on the shooter
+
+"Recoil is still happening even when I turned it on", and the log agreed the code had run:
+
+    [cheats] ... noRecoil(1)
+
+One shooter found and zeroed, and the rifle kicked anyway. So `vp_FPSShooter.MotionPositionRecoil`
+and `MotionRotationRecoil` are not what this game uses - they are UFPS leftovers.
+
+The recoil is four numbers on `GunItem`:
+
+    m_PitchRecoilMin / m_PitchRecoilMax     the upward kick, randomised between the two
+    m_YawRecoilMin   / m_YawRecoilMax       the sideways one
+
+Every gun in the scene has them zeroed now, each original stored as a `Vector4` against its instance
+id and written back on the way out. The shooter is still zeroed as well, because it costs nothing
+and covers any weapon that does travel the UFPS path, and the report names both counts separately -
+`noRecoil(guns=N shooters=M)` - so the next time one of them is the wrong number, the log says which.
+
+### And a no-sway switch beside it
+
+Sway is a third system again: the wobble while holding a sight, driven by fatigue, kept on `GunItem`
+as `m_SwayValueZeroFatigue`, `m_SwayValueMaxFatigue` and `m_SwayIncreasePerSecond`. All three are
+zeroed. The shake that comes from cold has the game's own switch,
+`vp_FPSWeapon.SetDisableAimShake`, so that is used rather than a fourth invention of ours, and its
+previous value is remembered.
+
+Three systems, three switches, and the reason they are not one switch is that they fail
+independently - this session proved it by removing one and watching the other two carry on.
+
+**A note on tooling:** `python - <<EOF` inside a compound Bash command hung this session and swallowed
+the write that should have gone here. Scripts go in a file written with the editor and are then run,
+which is the standing rule on this machine for a reason.
