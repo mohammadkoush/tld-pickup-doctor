@@ -127,6 +127,99 @@ namespace LDPickupDoctor
         private static bool _sprintWas;
         private static bool _haveSprintWas;
 
+        // ------------------------------------------------------------------------------------------
+        // ONE SHARED SCAN CACHE, AND THE REASON IT HAD TO EXIST
+        //
+        // Every pass in this file used to ask the scene for its objects directly. Fuel wanted four
+        // types four times a second, recoil wanted two, sway two, curing one, fires one - something
+        // like a dozen full-scene type scans every second, on a map with tens of thousands of
+        // objects. The game became unplayable, and the arithmetic was sitting in our own log:
+        //
+        //     fuel pass: ... top-ups this session = 10608
+        //
+        // ten thousand top-ups, which is 6.5 a second across two lamps, which is three and a half
+        // scans a second for lamps alone.
+        //
+        // A scene's cast of lanterns and rifles does not change three times a second. So the scan
+        // happens on a slow period and the passes walk the cached list at whatever rate they like,
+        // which costs nothing. The cost of scanning is measured and reported, because a performance
+        // fix that is not measured is a hope.
+        private static float _scanMs;
+        private static int _scanCount;
+
+        public static string ScanCost()
+        {
+            return _scanCount + " scans, " + _scanMs.ToString("0.0") + "ms";
+        }
+
+        public static void ResetScanCost() { _scanMs = 0f; _scanCount = 0; }
+
+        private static List<T> Scan<T>(ref List<T> store, ref float nextAt, float period)
+            where T : Object
+        {
+            float now = Time.realtimeSinceStartup;
+            if (store == null || now >= nextAt)
+            {
+                nextAt = now + period;
+                float t0 = Time.realtimeSinceStartup;
+                try
+                {
+                    Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<T> found =
+                        Object.FindObjectsOfType<T>();
+                    if (store == null) store = new List<T>();
+                    store.Clear();
+                    for (int i = 0; i < found.Length; i++) if (found[i] != null) store.Add(found[i]);
+                }
+                catch (System.Exception e)
+                {
+                    if (store == null) store = new List<T>();
+                    Log.OnceWarn("scan-threw", "a scene scan threw: " + e.Message
+                        + " - the previous list is kept and it is tried again next period.");
+                }
+                _scanMs += (Time.realtimeSinceStartup - t0) * 1000f;
+                _scanCount++;
+            }
+
+            // Objects do get destroyed between scans - a lantern picked up, a rifle stowed.
+            for (int i = store.Count - 1; i >= 0; i--) if (store[i] == null) store.RemoveAt(i);
+            return store;
+        }
+
+        // How often each cast list is refreshed. Ten seconds is a compromise with one visible edge:
+        // a lantern put down is picked up by the next scan rather than instantly. The held item is
+        // handled every frame by its own path, so the thing in hand is never late.
+        private const float ScanPeriod = 10f;
+
+        private static List<KeroseneLampItem> _lampList; private static float _lampNext;
+        private static List<TorchItem> _torchList; private static float _torchNext;
+        private static List<FlareItem> _flareList; private static float _flareNext;
+        private static List<FlashlightItem> _lightList; private static float _lightNext;
+        private static List<GunItem> _gunList; private static float _gunNext;
+        private static List<vp_FPSShooter> _shooterList; private static float _shooterNext;
+        private static List<vp_FPSWeapon> _weaponList; private static float _weaponNext;
+        private static List<EvolveItem> _evolveList; private static float _evolveNext;
+        private static List<BodyHarvest> _carcassList; private static float _carcassNext;
+        private static List<HarvestBase> _harvestList; private static float _harvestNext;
+        private static List<Fire> _fireList; private static float _fireListNext;
+
+        /// <summary>Force every cached list to be rebuilt - used when a scene changes.</summary>
+        private static void DropScans()
+        {
+            _lampNext = 0f; _torchNext = 0f; _flareNext = 0f; _lightNext = 0f;
+            _gunNext = 0f; _shooterNext = 0f; _weaponNext = 0f; _evolveNext = 0f;
+            _carcassNext = 0f; _harvestNext = 0f; _nextFireScan = 0f;
+            if (_lampList != null) _lampList.Clear();
+            if (_torchList != null) _torchList.Clear();
+            if (_flareList != null) _flareList.Clear();
+            if (_lightList != null) _lightList.Clear();
+            if (_gunList != null) _gunList.Clear();
+            if (_shooterList != null) _shooterList.Clear();
+            if (_weaponList != null) _weaponList.Clear();
+            if (_evolveList != null) _evolveList.Clear();
+            if (_carcassList != null) _carcassList.Clear();
+            if (_harvestList != null) _harvestList.Clear();
+        }
+
         /// <summary>One line for the report, naming everything that is currently on.</summary>
         public static string Active()
         {
@@ -148,6 +241,7 @@ namespace LDPickupDoctor
             if (Settings.CheatNoRecoil.Value) s += " noRecoil(guns=" + _gunsHeld + " shooters=" + _recoilHeld + ")";
             if (!Mathf.Approximately(Settings.RateCuring.Value, 1f))
                 s += " curing=" + Settings.RateCuring.Value.ToString("0.00") + "x(" + CuringHeld + ")";
+            if (Settings.CheatNoDegrade.Value) s += " noDegrade(" + RepairsMade + ")";
             if (Settings.CheatNoSway.Value) s += " noSway(guns=" + _swayHeld + " weapons=" + _weaponsHeld + ")";
             return s;
         }
@@ -161,6 +255,7 @@ namespace LDPickupDoctor
                 || Settings.CheatPerpetualFire.Value
                 || Settings.CheatNoRecoil.Value
                 || Settings.CheatNoSway.Value
+                || Settings.CheatNoDegrade.Value
                 || !Mathf.Approximately(Settings.RateCuring.Value, 1f)
                 || !Mathf.Approximately(Settings.RateCold.Value, 1f)
                 || !Mathf.Approximately(Settings.RateTired.Value, 1f)
@@ -172,12 +267,56 @@ namespace LDPickupDoctor
                 || Settings.HoldWellFed.Value;
         }
 
-        /// <summary>Every frame. Only the three that have to be: speed, the clip, and the held item.</summary>
+        /// <summary>Every frame. Only the ones that have to be, and all of them cheap.</summary>
         public static void FastTick()
         {
             Speed();
             Ammo();
             HeldFuel();
+            HeldCondition();
+        }
+
+        // ------------------------------------------------------------------------------------------
+        // THE HELD ITEM DOES NOT WEAR OUT
+        //
+        // Condition is one number on GearItem, and the game exposes a normalised setter for it, so
+        // this is the one cheat here with no arithmetic in it at all: while the switch is on, the
+        // thing in hand is held at full.
+        //
+        // Held only, and the reason is the same as the fuel dial's: it answers "the rifle I am
+        // shooting keeps degrading", which is what was asked, without quietly repairing an entire
+        // pack of clothing that nobody mentioned.
+        // ------------------------------------------------------------------------------------------
+        public static int RepairsMade;
+
+        private static void HeldCondition()
+        {
+            if (!Settings.CheatNoDegrade.Value) return;
+            try
+            {
+                PlayerManager pm = GameManager.GetPlayerManagerComponent();
+                if (pm == null) return;
+                GearItem held = pm.m_ItemInHands;
+                if (held == null) return;
+
+                // 100 is full condition in this game's units. Only written when it has actually
+                // slipped, so an item at full costs one comparison a frame and nothing else.
+                if (held.m_CurrentHP < 99.999f)
+                {
+                    held.SetNormalizedHP(1f, false);
+                    RepairsMade++;
+                    if (RepairsMade <= 3)
+                    {
+                        Log.Info("held item repaired to full (" + Sweep.NameOf(held)
+                            + "). Said for the first three only.");
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("degrade-threw", "the held item's condition could not be set: " + e.Message
+                    + " - tried again next frame, and the switch stays on.");
+            }
         }
 
         // ------------------------------------------------------------------------------------------
@@ -244,11 +383,10 @@ namespace LDPickupDoctor
             float m = FuelMultiplier();
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<KeroseneLampItem> lamps =
-                    Object.FindObjectsOfType<KeroseneLampItem>();
-                for (int i = 0; i < lamps.Length; i++) ApplyLamp(lamps[i], m);
-                _placedLamps = lamps.Length;
-                if (lamps.Length > 0 && lamps[0] != null)
+                List<KeroseneLampItem> lamps = Scan(ref _lampList, ref _lampNext, ScanPeriod);
+                for (int i = 0; i < lamps.Count; i++) ApplyLamp(lamps[i], m);
+                _placedLamps = lamps.Count;
+                if (lamps.Count > 0 && lamps[0] != null)
                 {
                     _lastLampReading = Sweep.Litres(lamps[0].m_CurrentFuelLiters).ToString("0.000")
                         + "L of " + Sweep.Litres(lamps[0].m_MaxFuel).ToString("0.000")
@@ -259,28 +397,25 @@ namespace LDPickupDoctor
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<TorchItem> torches =
-                    Object.FindObjectsOfType<TorchItem>();
-                for (int i = 0; i < torches.Length; i++) ApplyTorch(torches[i], m);
-                _placedTorches = torches.Length;
+                List<TorchItem> torches = Scan(ref _torchList, ref _torchNext, ScanPeriod);
+                for (int i = 0; i < torches.Count; i++) ApplyTorch(torches[i], m);
+                _placedTorches = torches.Count;
             }
             catch (System.Exception e) { FuelComplain("placed torches", e); }
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlareItem> flares =
-                    Object.FindObjectsOfType<FlareItem>();
-                for (int i = 0; i < flares.Length; i++) ApplyFlare(flares[i], m);
-                _placedFlares = flares.Length;
+                List<FlareItem> flares = Scan(ref _flareList, ref _flareNext, ScanPeriod);
+                for (int i = 0; i < flares.Count; i++) ApplyFlare(flares[i], m);
+                _placedFlares = flares.Count;
             }
             catch (System.Exception e) { FuelComplain("placed flares", e); }
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<FlashlightItem> lights =
-                    Object.FindObjectsOfType<FlashlightItem>();
-                for (int i = 0; i < lights.Length; i++) ApplyFlashlight(lights[i], m);
-                _placedCounts = _placedLamps + "/" + _placedTorches + "/" + _placedFlares + "/" + lights.Length;
+                List<FlashlightItem> lights = Scan(ref _lightList, ref _lightNext, ScanPeriod);
+                for (int i = 0; i < lights.Count; i++) ApplyFlashlight(lights[i], m);
+                _placedCounts = _placedLamps + "/" + _placedTorches + "/" + _placedFlares + "/" + lights.Count;
             }
             catch (System.Exception e) { FuelComplain("placed flashlights", e); }
 
@@ -506,7 +641,15 @@ namespace LDPickupDoctor
             {
                 try
                 {
-                    WellFed wf = Object.FindObjectOfType<WellFed>();
+                    // Cached like every other lookup in this file: WellFed is one component that
+                    // lives as long as the run, and asking the scene for it four times a second was
+                    // part of what made the game unplayable.
+                    if (_wellFed == null || Time.realtimeSinceStartup >= _wellFedNext)
+                    {
+                        _wellFedNext = Time.realtimeSinceStartup + ScanPeriod;
+                        _wellFed = Object.FindObjectOfType<WellFed>();
+                    }
+                    WellFed wf = _wellFed;
                     if (wf != null)
                     {
                         if (wf.m_Active)
@@ -539,6 +682,8 @@ namespace LDPickupDoctor
         }
 
         private static bool _wellFedWasActive;
+        private static WellFed _wellFed;
+        private static float _wellFedNext;
 
         /// <summary>
         /// Top one countdown back up to the duration it started from - but only if it is running.
@@ -605,9 +750,8 @@ namespace LDPickupDoctor
             // does go through the UFPS path. But this is the pass that does the work.
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =
-                    Object.FindObjectsOfType<GunItem>();
-                for (int i = 0; i < guns.Length; i++)
+                List<GunItem> guns = Scan(ref _gunList, ref _gunNext, ScanPeriod);
+                for (int i = 0; i < guns.Count; i++)
                 {
                     GunItem g = guns[i];
                     if (g == null) continue;
@@ -625,17 +769,16 @@ namespace LDPickupDoctor
                     g.m_YawRecoilMin = 0f;
                     g.m_YawRecoilMax = 0f;
                 }
-                _gunsHeld = guns.Length;
+                _gunsHeld = guns.Count;
             }
             catch (System.Exception e) { Log.OnceWarn("gun-recoil-threw",
                 "the gun's recoil values could not be written: " + e.Message + " - retried each second."); }
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSShooter> shooters =
-                    Object.FindObjectsOfType<vp_FPSShooter>();
+                List<vp_FPSShooter> shooters = Scan(ref _shooterList, ref _shooterNext, ScanPeriod);
                 int held = 0;
-                for (int i = 0; i < shooters.Length; i++)
+                for (int i = 0; i < shooters.Count; i++)
                 {
                     vp_FPSShooter sh = shooters[i];
                     if (sh == null) continue;
@@ -698,9 +841,8 @@ namespace LDPickupDoctor
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =
-                    Object.FindObjectsOfType<GunItem>();
-                for (int i = 0; i < guns.Length; i++)
+                List<GunItem> guns = Scan(ref _gunList, ref _gunNext, ScanPeriod);
+                for (int i = 0; i < guns.Count; i++)
                 {
                     GunItem g = guns[i];
                     if (g == null) continue;
@@ -717,7 +859,7 @@ namespace LDPickupDoctor
                     g.m_SwayValueMaxFatigue = 0f;
                     g.m_SwayIncreasePerSecond = 0f;
                 }
-                _swayHeld = guns.Length;
+                _swayHeld = guns.Count;
             }
             catch (System.Exception e)
             {
@@ -751,9 +893,8 @@ namespace LDPickupDoctor
             // sight sits still to look at as well as to shoot with.
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSWeapon> weapons =
-                    Object.FindObjectsOfType<vp_FPSWeapon>();
-                for (int i = 0; i < weapons.Length; i++)
+                List<vp_FPSWeapon> weapons = Scan(ref _weaponList, ref _weaponNext, ScanPeriod);
+                for (int i = 0; i < weapons.Count; i++)
                 {
                     vp_FPSWeapon w = weapons[i];
                     if (w == null) continue;
@@ -778,7 +919,7 @@ namespace LDPickupDoctor
                     w.ShakeAmplitude = Vector3.zero;
                     w.BobAmplitude = Vector4.zero;
                 }
-                _weaponsHeld = weapons.Length;
+                _weaponsHeld = weapons.Count;
             }
             catch (System.Exception e)
             {
@@ -820,9 +961,8 @@ namespace LDPickupDoctor
 
             try
             {
-                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<EvolveItem> items =
-                    Object.FindObjectsOfType<EvolveItem>();
-                for (int i = 0; i < items.Length; i++)
+                List<EvolveItem> items = Scan(ref _evolveList, ref _evolveNext, ScanPeriod);
+                for (int i = 0; i < items.Count; i++)
                 {
                     EvolveItem e = items[i];
                     if (e == null) continue;
@@ -838,7 +978,7 @@ namespace LDPickupDoctor
                     }
                     e.m_TimeToEvolveGameDays = baseline / dial;
                 }
-                CuringHeld = items.Length;
+                CuringHeld = items.Count;
             }
             catch (System.Exception ex)
             {
@@ -1403,9 +1543,8 @@ namespace LDPickupDoctor
                 Transform p = GameManager.GetPlayerTransform();
                 if (p != null)
                 {
-                    Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<BodyHarvest> all =
-                        Object.FindObjectsOfType<BodyHarvest>();
-                    for (int i = 0; i < all.Length; i++)
+                    List<BodyHarvest> all = Scan(ref _carcassList, ref _carcassNext, ScanPeriod);
+                    for (int i = 0; i < all.Count; i++)
                     {
                         BodyHarvest bh = all[i];
                         if (bh == null) continue;
@@ -1566,9 +1705,8 @@ namespace LDPickupDoctor
                 _fires.Clear();
                 try
                 {
-                    Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<Fire> all =
-                        Object.FindObjectsOfType<Fire>();
-                    for (int i = 0; i < all.Length; i++) if (all[i] != null) _fires.Add(all[i]);
+                    List<Fire> all = Scan(ref _fireList, ref _fireListNext, ScanPeriod);
+                    for (int i = 0; i < all.Count; i++) if (all[i] != null) _fires.Add(all[i]);
                 }
                 catch (System.Exception e)
                 {
@@ -1672,6 +1810,7 @@ namespace LDPickupDoctor
             _fireLifeWas = -1f;
             _fireLifeFalling = 0;
             _nextFireScan = 0f;
+            DropScans();
 
             // Handles are dropped so they are looked up fresh...
             _controller = null;

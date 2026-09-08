@@ -588,3 +588,43 @@ something else takes to get there. The dial divides it, so **above 1.00 is faste
 direction to the fuel dial, deliberately: fuel is named for how fast something drains, curing is
 named for how fast a job finishes, and each reads correctly for what it is called. Each item keeps
 its own original time and gets it back at 1.00.
+
+---
+
+## 2026-09-08 - the lag was mine, and the arithmetic was already in the log
+
+"Something is making the game very laggy. Like, unplayable laggy."
+
+Every cheat pass in `Cheats.cs` was asking the scene for its objects directly, with
+`FindObjectsOfType`, and the fuel pass had just been raised to four times a second. Counted rather
+than guessed: fuel wanted four types, recoil two, sway two, curing one, fires one, Well Fed one -
+somewhere around a dozen full-scene type scans every second on a map with tens of thousands of
+objects. Our own log had the multiplier sitting in it:
+
+    fuel pass: ... top-ups this session = 10608
+
+Ten thousand top-ups is 6.5 a second across two lamps, which is three and a half scans a second for
+lamps alone.
+
+**One shared cache now.** `Cheats.Scan<T>` refreshes each cast list on a ten second period and every
+pass walks the cached list at whatever rate it likes, which costs nothing. Destroyed objects are
+pruned on each walk, and a scene change drops every list. The one visible edge is that a lantern put
+down is noticed by the next scan rather than instantly - the held item has its own per-frame path,
+so the thing in hand is never late.
+
+**And the cost is measured now**, in the report, because a performance fix that is not measured is a
+hope:
+
+    [scans] 55 scans, 386.7ms since the last report
+
+Fifty-five scans a minute at about 7ms each. At the old rate of a dozen a second that same 7ms was
+roughly 90ms of stall per second of play, which is what unplayable feels like from the inside.
+
+## 2026-09-08 - the held item does not wear out
+
+`CheatNoDegrade`: while it is on, whatever is in hand is held at full condition through the game's
+own normalised setter, and topped back up the moment it is equipped. Written only when the condition
+has actually slipped, so an item at full costs one comparison a frame.
+
+Held only, for the same reason the fuel dial is: it answers "the rifle I am shooting keeps
+degrading" without quietly repairing a pack full of clothing that nobody mentioned.

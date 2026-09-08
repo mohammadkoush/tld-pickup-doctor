@@ -44,6 +44,11 @@ namespace LDPickupDoctor
             }
             catch (System.Exception) { }
 
+            Log.Info("[scans] " + Cheats.ScanCost()
+                + " since the last report - this is the number that made the game lag when it "
+                + "was a dozen a second.");
+            Cheats.ResetScanCost();
+
             Log.Info("[state] weight " + weight
                 + "  sweeps=" + Sweep.SweepCount
                 + "  lastSweep=" + Sweep.LastSweepMs.ToString("0.00") + "ms"

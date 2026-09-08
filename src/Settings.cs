@@ -112,6 +112,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<bool> CheatNoRecoil;
         public static MelonPreferences_Entry<bool> CheatNoSway;
         public static MelonPreferences_Entry<float> RateCuring;
+        public static MelonPreferences_Entry<bool> CheatNoDegrade;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -302,6 +303,10 @@ namespace LDPickupDoctor
                     + "gun's sway range and its build-up rate, and uses the game's own "
                     + "aim-shake switch for the shake that comes from cold. All of it is put "
                     + "back when switched off.");
+
+            CheatNoDegrade = _cheats.CreateEntry("NoDegradeHeld", false,
+                description: "Keep the item in hand at full condition. A firearm being fired, a hatchet being swung, a lamp being carried - whatever is held stops wearing out, and is topped back up to full the moment it is equipped. Items in the pack are untouched."
+                    );
 
             RateCuring = _cheats.CreateEntry("CuringSpeed", 1.0f,
                 description: "How fast hides, guts and anything else that cures over time get "
