@@ -133,6 +133,7 @@ sweeping down a column covers the row you were trying to read. Set it to `0` for
 | **Keys** | Every hotkey, click to rebind. |
 | **Advanced** | Sweep interval and radius, diagnostics, live sweep cost. |
 | **Interface** | The window itself: opacity, explanation delay, cursor. |
+| **Cheats** | The exception to the rule above. See below. |
 
 ### Default keys
 
@@ -144,6 +145,57 @@ sweeping down a column covers the row you were trying to read. Set it to `0` for
 | `F10` | The settings window. |
 | `F11` | Write the diagnostic report to the log now. |
 | `Ctrl` and `S` | Save the game where you stand, through the game's own save and its own message. |
+| `PageUp` / `PageDown` | Raise or lower the movement speed multiplier (Cheats tab). |
+
+---
+
+## The Cheats tab
+
+**This tab does not follow the rule the rest of the mod follows.** Everything else removes
+repetition and leaves the game's price where Hinterland put it. Everything here removes the price,
+because testing needs it: you cannot judge a pickup radius against a carry cap you keep hitting, or
+outline colours across a map you have to walk.
+
+| Cheat | Does | Default |
+|---|---|---|
+| Movement speed | Scales `vp_FPSController.MotorAcceleration`. `1.00` is off. | `1.00` |
+| Instant harvest | Zeroes `HarvestBase.m_DurationMinutes` on items and `BodyHarvest.m_QuarterDurationMinutes` on carcasses. | off |
+| Unlimited carrying weight | Raises `Encumber.m_MaxCarryCapacity` to `CarryKG`. | off |
+| Unlimited ammo | Keeps the clip of the gun **in your hands** full. Ammo in the pack is untouched. | off |
+| Perpetual fire | Sets the game's own `Fire.m_IsPerpetual`, the flag it uses for scripted fires. | off |
+| Cold rate | Scales `Freezing.m_FreezingIncreasePerHourPerDegreeCelsius`. | `1.00` |
+| Tiredness rate | Scales every `Fatigue.m_FatigueIncreasePerHour*`. | `1.00` |
+| Thirst rate | Scales `Thirst.m_ThirstIncreasePerDay` awake and resting. | `1.00` |
+| Food rate | Scales all ten `Hunger.m_CalorieBurnPerHour*` figures together. | `1.00` |
+| Stamina rate | Scales `PlayerMovement.m_SprintStaminaUsagePerSecond`; at the bottom it uses the game's own unlimited-sprint flag. | `1.00` |
+
+The five rate dials go **both ways** - below 1 is gentler, above 1 is harsher - so they are as much
+a difficulty dial as a cheat. Each scales the game's own per-hour numbers rather than replacing them
+with one figure of ours, which keeps the relationships Hinterland balanced: fatigue still builds
+faster sprinting than standing, and cold still bites harder the colder it gets.
+
+While a dial sits at `1.00` the stored baseline is **kept refreshed from the live value**, so a
+difficulty change or a buff is picked up rather than overwritten. The moment it leaves `1.00` the
+refresh stops and every write is `baseline x multiplier` - never the previous write times the
+multiplier again, which is how a dial like this quietly runs away.
+
+Three properties every one of them has:
+
+1. **Reversible.** Nothing is written without its original being stored first, and everything is put
+   back when the switch goes off. Three of these touch objects the game *serialises*, and a cheat
+   that forgets what it overwrote quietly edits a save you keep.
+2. **Re-applied, not set once.** The game rewrites acceleration when you crouch or get encumbered,
+   and recomputes the carry cap from buffs and fatigue. A single write would last until the first
+   crouch and then silently stop.
+3. **Announced.** While any of them is on, the diagnostic report carries a `[cheats]` line above the
+   tally, so a number read back next week has "speed was at 3x" sitting right above it.
+
+Perpetual fire is also *verified* rather than trusted: if the remaining life of the nearest fire
+keeps falling three checks in a row with the flag set, the mod winds the fuel clock back directly
+and says in the log that the flag was not enough on its own.
+
+**Speed above about 4x** starts passing the character through thin geometry. That is the engine, not
+a setting to raise.
 
 ---
 

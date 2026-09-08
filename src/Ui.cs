@@ -26,7 +26,7 @@ namespace LDPickupDoctor
 
         private static readonly string[] Tabs =
         {
-            "Items", "Pickup", "Highlight", "Colours", "Grind", "Keys", "Advanced", "Interface"
+            "Items", "Pickup", "Highlight", "Colours", "Grind", "Keys", "Advanced", "Interface", "Cheats"
         };
         private static int _tab;
 
@@ -58,6 +58,7 @@ namespace LDPickupDoctor
             }
             else
             {
+                if (_focusKey.Length > 0) Commit();
                 _rebinding = null;
                 if (Settings.WindowPausesCursor.Value)
                 {
@@ -79,6 +80,9 @@ namespace LDPickupDoctor
         {
             if (!Open) return;
             EnsureSkin();
+
+            // Typing goes through our own field before anything else looks at the key.
+            if (TypeInto()) return;
 
             // A rebind swallows the next key press, wherever the cursor is.
             if (_rebinding != null && Event.current != null && Event.current.type == EventType.KeyDown)
@@ -194,7 +198,8 @@ namespace LDPickupDoctor
                 case 4: GrindTab(); break;
                 case 5: KeysTab(); break;
                 case 6: AdvancedTab(); break;
-                default: InterfaceTab(); break;
+                case 7: InterfaceTab(); break;
+                default: CheatsTab(); break;
             }
             GUILayout.EndScrollView();
 
@@ -220,8 +225,12 @@ namespace LDPickupDoctor
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("filter", _label, GUILayout.Width(60f));
-            _itemFilter = GUILayout.TextField(_itemFilter ?? "", GUILayout.Width(240f));
-            if (GUILayout.Button("clear", GUILayout.Width(60f))) _itemFilter = "";
+            Field("itemfilter", null, _itemFilter, 240f);
+            if (GUILayout.Button("clear", GUILayout.Width(60f)))
+            {
+                _itemFilter = "";
+                if (_focusKey == "itemfilter") { _focusKey = ""; _focusEntry = null; }
+            }
             GUILayout.FlexibleSpace();
             GUILayout.Label(Sweep.SeenNames.Count + " seen", _label);
             GUILayout.EndHorizontal();
@@ -339,6 +348,8 @@ namespace LDPickupDoctor
             Key(Settings.KeySave, "Save the game");
             Toggle(Settings.KeySaveNeedsCtrl, "Save key needs Ctrl held");
             Slider(Settings.SaveCooldownSeconds, 1f, 60f, "Least seconds between saves");
+            Key(Settings.KeySpeedUp, "Speed up");
+            Key(Settings.KeySpeedDown, "Speed down");
         }
 
         private static void AdvancedTab()
@@ -367,6 +378,142 @@ namespace LDPickupDoctor
             Slider(Settings.WindowOpacity, 0.3f, 1f, "Window opacity");
             Slider(Settings.TooltipDelaySeconds, 0f, 5f, "Explanation delay (s)");
             Toggle(Settings.WindowPausesCursor, "Free the mouse while open");
+        }
+
+        private static void CheatsTab()
+        {
+            GUI.color = new Color(1f, 0.72f, 0.45f);
+            GUILayout.Label("These do not follow the rule the rest of this mod follows. Everything in "
+                + "the other tabs removes repetition and leaves the game's price alone. Everything "
+                + "here removes the price, because you asked for it for testing. All of it is "
+                + "reversible, and the log names every one that is on.", _label);
+            GUI.color = Color.white;
+            GUILayout.Space(8f);
+
+            Slider(Settings.CheatSpeed, 0.25f, 8f, "Movement speed (1.00 is off)");
+            Slider(Settings.CheatSpeedStep, 0.05f, 1f, "Speed step per key press");
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(280f);
+            if (GUILayout.Button("slower", GUILayout.Width(90f))) Cheats.NudgeSpeed(-1);
+            if (GUILayout.Button("normal", GUILayout.Width(90f)))
+            {
+                Settings.CheatSpeed.Value = 1f;
+                MelonPreferences.Save();
+            }
+            if (GUILayout.Button("faster", GUILayout.Width(90f))) Cheats.NudgeSpeed(1);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
+            Toggle(Settings.CheatInstantHarvest, "Instant harvest (items and carcasses)");
+            Toggle(Settings.CheatUnlimitedCarry, "Unlimited carrying weight");
+            Slider(Settings.CheatCarryKG, 30f, 2000f, "What unlimited means (kg)");
+            Toggle(Settings.CheatUnlimitedAmmo, "Unlimited ammo in the gun you hold");
+            Toggle(Settings.CheatPerpetualFire, "Fires, stoves and fireplaces never go out");
+
+            GUILayout.Space(10f);
+            GUI.color = new Color(0.75f, 0.85f, 0.95f);
+            GUILayout.Label("Survival rates. Each is a multiple of the game's own per-hour number, "
+                + "and 1.00 is off. Below 1 is gentler, above 1 is harsher - these go both ways, so "
+                + "they are as much a difficulty dial as a cheat.", _label);
+            GUI.color = Color.white;
+            Slider(Settings.RateCold, 0f, 3f, "Cold - how fast you freeze");
+            Slider(Settings.RateTired, 0f, 3f, "Tiredness - how fast fatigue builds");
+            Slider(Settings.RateThirst, 0f, 3f, "Thirst - how fast you dry out");
+            Slider(Settings.RateHunger, 0f, 3f, "Food - how fast calories burn");
+            Slider(Settings.RateStamina, 0f, 3f, "Stamina - how fast sprinting drains it");
+
+            GUILayout.Space(10f);
+            string on = Cheats.Active();
+            Stat("currently on", on.Length == 0 ? "nothing" : on.Trim());
+        }
+
+        // ---- text entry, built from parts that survive stripping ---------------------------------
+        //
+        // GUILayout.TextField CANNOT BE USED IN THIS GAME. It reaches UnityEngine.TextEditor, which
+        // Hinterland's build has stripped, and Il2CppInterop cannot unstrip it - every call threw
+        // "Method unstripping failed" and took the rest of the tab down with it. The stack said so
+        // exactly:
+        //
+        //     at UnityEngine.TextEditor.SaveBackup()
+        //     at UnityEngine.GUI.DoTextField(...)
+        //     at LDPickupDoctor.Ui.ItemsTab()
+        //
+        // So the field is made of a Button (for the click and the frame) and the raw key events,
+        // both of which are present. It is less capable than a real text field - no selection, no
+        // clipboard - and it is the only kind that works here.
+
+        private static string _focusKey = "";
+        private static string _focusText = "";
+        private static MelonPreferences_Entry<string> _focusEntry;
+
+        /// <summary>
+        /// Feed key events into the focused field. Returns true when the event was ours, so the
+        /// rest of the window does not also act on the same press.
+        /// </summary>
+        private static bool TypeInto()
+        {
+            if (_focusKey.Length == 0) return false;
+            Event e = Event.current;
+            if (e == null || e.type != EventType.KeyDown) return false;
+
+            if (e.keyCode == KeyCode.Escape || e.keyCode == KeyCode.Return
+                || e.keyCode == KeyCode.KeypadEnter)
+            {
+                Commit();
+                e.Use();
+                return true;
+            }
+            if (e.keyCode == KeyCode.Backspace)
+            {
+                if (_focusText.Length > 0) _focusText = _focusText.Substring(0, _focusText.Length - 1);
+                e.Use();
+                return true;
+            }
+            if (e.character != '\0' && !char.IsControl(e.character))
+            {
+                _focusText += e.character;
+                e.Use();
+                return true;
+            }
+            return false;
+        }
+
+        private static void Commit()
+        {
+            if (_focusEntry != null && _focusEntry.Value != _focusText)
+            {
+                _focusEntry.Value = _focusText;
+                MelonPreferences.Save();
+            }
+            else if (_focusEntry == null)
+            {
+                _itemFilter = _focusText;
+            }
+            _focusKey = "";
+            _focusEntry = null;
+        }
+
+        /// <summary>One editable field. Click it, type, press Enter or Escape to finish.</summary>
+        private static void Field(string key, MelonPreferences_Entry<string> entry, string plain, float width)
+        {
+            bool focused = _focusKey == key;
+            string shown = focused ? _focusText + "_" : (entry != null ? (entry.Value ?? "") : (plain ?? ""));
+            if (shown.Length == 0) shown = focused ? "_" : " ";
+
+            GUI.color = focused ? new Color(1f, 0.9f, 0.55f) : Color.white;
+            if (GUILayout.Button(shown, GUILayout.Width(width)))
+            {
+                if (focused) Commit();
+                else
+                {
+                    if (_focusKey.Length > 0) Commit();
+                    _focusKey = key;
+                    _focusEntry = entry;
+                    _focusText = entry != null ? (entry.Value ?? "") : (plain ?? "");
+                }
+            }
+            GUI.color = Color.white;
         }
 
         // ---- row kinds ----------------------------------------------------------------------------
@@ -419,8 +566,7 @@ namespace LDPickupDoctor
         {
             Row(e, label, delegate
             {
-                string now = GUILayout.TextField(e.Value ?? "", GUILayout.Width(380f));
-                if (now != e.Value) { e.Value = now; MelonPreferences.Save(); }
+                Field(e.Identifier, e, null, 380f);
                 GUILayout.FlexibleSpace();
             });
         }
@@ -429,8 +575,7 @@ namespace LDPickupDoctor
         {
             Row(e, label, delegate
             {
-                string now = GUILayout.TextField(e.Value ?? "", GUILayout.Width(110f));
-                if (now != e.Value) { e.Value = now; MelonPreferences.Save(); }
+                Field(e.Identifier, e, null, 110f);
                 GUILayout.Space(8f);
                 Color c;
                 if (ColorUtility.TryParseHtmlString((e.Value ?? "").Trim(), out c))

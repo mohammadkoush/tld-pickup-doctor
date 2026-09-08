@@ -32,6 +32,7 @@ namespace LDPickupDoctor
         private static MelonPreferences_Category _keys;
         private static MelonPreferences_Category _iface;
         private static MelonPreferences_Category _diag;
+        private static MelonPreferences_Category _cheats;
 
         // ---- general ---------------------------------------------------------------------------
         public static MelonPreferences_Entry<bool> Enabled;
@@ -90,6 +91,34 @@ namespace LDPickupDoctor
         // missing one: it looks like the mod is broken. It goes in when it can be verified.
         public static MelonPreferences_Entry<bool> InstantBreakDown;
 
+        // ---- cheats ----------------------------------------------------------------------------
+        //
+        // These are NOT held to the rule above, and that is the whole reason they live in their own
+        // category with their own tab. Everything else in this mod removes repetition and leaves the
+        // price alone. This section removes the price, on purpose, because he asked for it for
+        // testing: you cannot test a pickup radius against a carry cap you keep hitting, or an
+        // outline colour across a map you have to walk.
+        //
+        // Every one is off (or neutral) by default, every one is reversible, and every one is
+        // announced in the diagnostic report while it is on - so a strange number in a tally a week
+        // from now has "the speed cheat was at 3x" sitting right above it.
+        public static MelonPreferences_Entry<float> CheatSpeed;
+        public static MelonPreferences_Entry<float> CheatSpeedStep;
+        public static MelonPreferences_Entry<bool> CheatInstantHarvest;
+        public static MelonPreferences_Entry<bool> CheatUnlimitedCarry;
+        public static MelonPreferences_Entry<float> CheatCarryKG;
+        public static MelonPreferences_Entry<bool> CheatUnlimitedAmmo;
+        public static MelonPreferences_Entry<bool> CheatPerpetualFire;
+
+        // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
+        // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
+        // refreshed from the live values, so a difficulty change is picked up rather than overwritten.
+        public static MelonPreferences_Entry<float> RateCold;
+        public static MelonPreferences_Entry<float> RateTired;
+        public static MelonPreferences_Entry<float> RateThirst;
+        public static MelonPreferences_Entry<float> RateHunger;
+        public static MelonPreferences_Entry<float> RateStamina;
+
         // ---- keys ------------------------------------------------------------------------------
         public static MelonPreferences_Entry<string> KeyWindow;
         public static MelonPreferences_Entry<string> KeySweepRoom;
@@ -99,6 +128,8 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<string> KeySave;
         public static MelonPreferences_Entry<bool> KeySaveNeedsCtrl;
         public static MelonPreferences_Entry<float> SaveCooldownSeconds;
+        public static MelonPreferences_Entry<string> KeySpeedUp;
+        public static MelonPreferences_Entry<string> KeySpeedDown;
 
         // ---- interface -------------------------------------------------------------------------
         public static MelonPreferences_Entry<float> WindowOpacity;
@@ -119,6 +150,7 @@ namespace LDPickupDoctor
             _keys = MelonPreferences.CreateCategory("LDPD_Keys", "Pickup Doctor - Keys");
             _iface = MelonPreferences.CreateCategory("LDPD_Interface", "Pickup Doctor - Interface");
             _diag = MelonPreferences.CreateCategory("LDPD_Diagnostics", "Pickup Doctor - Diagnostics");
+            _cheats = MelonPreferences.CreateCategory("LDPD_Cheats", "Pickup Doctor - Cheats");
 
             Enabled = _general.CreateEntry("Enabled", true,
                 description: "Master switch. Off means the mod does nothing at all, not even scan.");
@@ -215,11 +247,58 @@ namespace LDPickupDoctor
                     + "Everything else in this mod removes clicking; this removes cost. Off by "
                     + "default, and it puts every hour cost back the moment you turn it off.");
 
+            CheatSpeed = _cheats.CreateEntry("SpeedMultiplier", 1.0f,
+                description: "Movement speed, as a multiple. 1.00 is the game's own speed and is also "
+                    + "the OFF position - at 1.00 the original acceleration is put back and nothing "
+                    + "is touched. Above about 4 the character starts passing through thin geometry, "
+                    + "which is the engine's limit rather than a setting to raise.");
+            CheatSpeedStep = _cheats.CreateEntry("SpeedStep", 0.25f,
+                description: "How much the speed keys move the multiplier per press.");
+            CheatInstantHarvest = _cheats.CreateEntry("InstantHarvest", false,
+                description: "Zero the harvest duration on items and carcasses. Reversible: each "
+                    + "original duration is stored and put back when you turn this off.");
+            CheatUnlimitedCarry = _cheats.CreateEntry("UnlimitedCarry", false,
+                description: "Raise the carry cap to CarryKG. The mod's own weight gate then passes "
+                    + "on its own, because it reads the game's number rather than keeping one.");
+            CheatCarryKG = _cheats.CreateEntry("CarryKG", 500f,
+                description: "What 'unlimited' means, in kilograms. Not infinity on purpose - the "
+                    + "encumbrance bar and the calorie burn are computed from this, and a real "
+                    + "infinity makes both meaningless instead of generous.");
+            CheatUnlimitedAmmo = _cheats.CreateEntry("UnlimitedAmmo", false,
+                description: "Keep the clip of the firearm in your hands full. It tops up the gun you "
+                    + "are holding only, so ammo in the pack is untouched.");
+            CheatPerpetualFire = _cheats.CreateEntry("PerpetualFire", false,
+                description: "Fires, stoves and fireplaces never go out. This sets the game's own "
+                    + "m_IsPerpetual flag, the one it uses for scripted fires, and clears it again "
+                    + "when you turn this off.");
+
             KeyWindow = _keys.CreateEntry("Window", "F10", description: "Open and close the settings window.");
             KeySweepRoom = _keys.CreateEntry("SweepRoom", "F7", description: "Take everything eligible nearby, once.");
             KeyToggleHighlight = _keys.CreateEntry("ToggleHighlight", "F8", description: "Outlines on or off.");
             KeyTogglePickup = _keys.CreateEntry("TogglePickup", "F9", description: "Auto pickup on or off.");
             KeyReport = _keys.CreateEntry("Report", "F11", description: "Write the diagnostic report to the log now.");
+            RateCold = _cheats.CreateEntry("ColdRate", 1.0f,
+                description: "How fast you freeze, as a multiple of the game's own rate. 1.00 is off. "
+                    + "It scales the per-degree freezing coefficient, so cold still bites harder the "
+                    + "colder it is - the curve is the game's, only the steepness is yours.");
+            RateTired = _cheats.CreateEntry("TirednessRate", 1.0f,
+                description: "How fast fatigue builds, standing, walking and sprinting alike. 1.00 is off.");
+            RateThirst = _cheats.CreateEntry("ThirstRate", 1.0f,
+                description: "How fast thirst builds, awake and resting. 1.00 is off.");
+            RateHunger = _cheats.CreateEntry("HungerRate", 1.0f,
+                description: "How fast calories burn - every activity the game tracks separately, "
+                    + "scaled together so the relationship between them is untouched. 1.00 is off.");
+            RateStamina = _cheats.CreateEntry("StaminaRate", 1.0f,
+                description: "How fast sprinting drains stamina. 1.00 is off. At the very bottom of "
+                    + "the slider it switches on the game's own unlimited-sprint flag instead of "
+                    + "dividing by something near zero.");
+
+            KeySpeedUp = _keys.CreateEntry("SpeedUp", "PageUp",
+                description: "Raise the speed multiplier by SpeedStep.");
+            KeySpeedDown = _keys.CreateEntry("SpeedDown", "PageDown",
+                description: "Lower the speed multiplier by SpeedStep. It stops at 0.25 rather than "
+                    + "at zero, because a multiplier of zero is a character that cannot move and "
+                    + "looks exactly like a crash.");
             KeySave = _keys.CreateEntry("SaveGame", "S",
                 description: "Save the game where you stand, with the game's own save and its own "
                     + "'game saved' message. This is not a cheat - it is the same save the game makes "

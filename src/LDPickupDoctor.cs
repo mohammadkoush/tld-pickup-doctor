@@ -51,6 +51,7 @@ namespace LDPickupDoctor
             Silhouette.ClearAll();
             Highlight.Off();
             Grind.ForgetScene();
+            Cheats.ForgetScene();
             _sceneStamp++;
             _worldReady = false;
         }
@@ -106,8 +107,14 @@ namespace LDPickupDoctor
                 Pickup.Pass(Settings.PickupRadius.Value, Mathf.Max(1, Settings.PickupPerSweep.Value));
                 Grind.AutoHarvestPass();
                 Grind.BreakDownPass();
+                Cheats.SlowTick();
                 Highlight.Refresh();
             }
+
+            // Every frame, both of them: the speed cheat is fighting the game's own movement state
+            // machine for one field, and a clip that refills a quarter second late is a click that
+            // did nothing.
+            Cheats.FastTick();
 
             // Drawn every frame, not every sweep: the outline must follow the camera, not stutter
             // at the sweep interval.
@@ -201,6 +208,12 @@ namespace LDPickupDoctor
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeyReport, KeyCode.F11)))
                     Diagnostics.Report(true);
+
+                if (Input.GetKeyDown(Settings.Key(Settings.KeySpeedUp, KeyCode.PageUp)))
+                    Cheats.NudgeSpeed(1);
+
+                if (Input.GetKeyDown(Settings.Key(Settings.KeySpeedDown, KeyCode.PageDown)))
+                    Cheats.NudgeSpeed(-1);
 
                 if (Input.GetKeyDown(Settings.Key(Settings.KeySave, KeyCode.S)))
                 {

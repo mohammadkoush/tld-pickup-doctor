@@ -193,3 +193,47 @@ Fixed by installing the library it wanted: **ModSettings 2.2.5** from
 `DigitalzombieTLD/ModSettings` (the maintained fork; the original `zeobviouslyfakeacc` repo is
 archived at 1.9.0). It is itself a MelonMod, so it goes in `Mods\`, not `UserLibs\`. Confirmed:
 four mods load, no errors, log back to kilobytes.
+
+---
+
+## 2026-09-08 - the Cheats tab, and two bugs the log caught within a minute of each other
+
+He asked for testing cheats: speed up and down, instant harvest, unlimited carrying weight,
+unlimited ammo in a firearm, fires that never go out, and rate dials for cold, tiredness, thirst,
+food and stamina. They live in `src/Cheats.cs`, their own preferences category and their own tab,
+deliberately fenced off from the rule the rest of the mod follows. Everything is off or neutral by
+default, everything is reversible, and the diagnostic report carries a `[cheats]` line while any of
+them is on.
+
+### `GUILayout.TextField` cannot be used in this game
+
+The window drew its tabs but the Items tab threw, and the stack named the cause exactly:
+
+    System.NotSupportedException: Method unstripping failed
+       at UnityEngine.TextEditor.SaveBackup()
+       at UnityEngine.GUI.DoTextField(...)
+       at LDPickupDoctor.Ui.ItemsTab()
+
+Hinterland's build has `UnityEngine.TextEditor` stripped and Il2CppInterop cannot unstrip it. Every
+text field is now built from a `Button` plus raw key events, both of which survive. Less capable -
+no selection, no clipboard - and the only kind that works here. **Do not reintroduce `TextField`.**
+
+Known limit: while a field has focus, the keystrokes still reach the game as well, because the game
+polls legacy input rather than reading IMGUI events. The Items tab has add and remove buttons for
+exactly that reason.
+
+### The speed cheat re-baselined from its own write
+
+Two lines, seconds apart, in the first run with cheats:
+
+    speed cheat on - the game's own acceleration is 0.0300, now scaled by 2.29x
+    speed cheat on - the game's own acceleration is 0.0687, now scaled by 2.29x
+
+0.0300 x 2.29 = 0.0687. The controller handle went stale, the code re-looked it up, and re-captured
+the "original" from the value it had itself written - so each re-lookup multiplied the speed again,
+and the value it would have restored was wrong too. Baselines are now keyed by controller instance
+id, so an object already seen is never re-baselined.
+
+The same trap is handled explicitly in `Cheats.Scale`, used by the five rate dials: on the way back
+to `1.00` the stored baseline is *restored* before tracking resumes, because the live value at that
+moment is still our own write. That branch carries a comment saying so; do not simplify it away.

@@ -73,6 +73,10 @@ namespace LDPickupDoctor
                     + " harvested=" + Grind.HarvestedTotal + line);
             }
 
+            // SAY SO. A tally read back a week later must not have to guess why the numbers look
+            // wrong; if a cheat was on, it is on the line above them.
+            if (Cheats.AnyOn()) Log.Info("[cheats]" + Cheats.Active());
+
             bool anyRepeat = false;
             foreach (KeyValuePair<string, int> kv in Log.Repeats())
             {
