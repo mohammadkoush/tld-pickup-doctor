@@ -110,12 +110,16 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> CheatCarryKG;
         public static MelonPreferences_Entry<bool> CheatUnlimitedAmmo;
         public static MelonPreferences_Entry<bool> CheatPerpetualFire;
-        public static MelonPreferences_Entry<bool> CheatNoRecoil;
-        public static MelonPreferences_Entry<bool> CheatNoSway;
+        // ONE SWITCH, NOT TWO. Sway and recoil are three systems underneath - the gun's own
+        // numbers, the weapon model's motion, and the camera's ambient sway in degrees - and every
+        // one of them had to be found separately. That is an implementation detail, and putting it
+        // on the page as three toggles would make the person using it responsible for knowing it.
+        public static MelonPreferences_Entry<bool> CheatSteadyAim;
         public static MelonPreferences_Entry<float> RateCuring;
         public static MelonPreferences_Entry<float> RateDaylight;
         public static MelonPreferences_Entry<bool> CheatNoDegrade;
         public static MelonPreferences_Entry<bool> CheatFreeRepair;
+        public static MelonPreferences_Entry<bool> CheatCentreDot;
 
         // Survival rates. Multipliers on the game's own per-hour numbers, 1.00 meaning "leave it
         // alone" and also meaning OFF - at 1.00 nothing is written and the stored originals are kept
@@ -322,22 +326,22 @@ namespace LDPickupDoctor
             KeyTogglePickup = _keys.CreateEntry("TogglePickup", "End",
                 description: "Auto pickup on or off. NOT on F9: that is the game's screenshot key.");
             KeyReport = _keys.CreateEntry("Report", "F11", description: "Write the diagnostic report to the log now.");
-            CheatNoRecoil = _cheats.CreateEntry("NoRecoil", false,
+            CheatSteadyAim = _cheats.CreateEntry("NoSwayOrRecoil", false,
                 description: "Take the kick out of firearms. It zeroes the shooter's own recoil "
                     + "vectors - the position and rotation kick applied on firing, and the dry-fire "
                     + "kick - and puts every one of them back when switched off. Aim sway from cold "
                     + "is a separate thing and is left alone.");
 
-            CheatNoSway = _cheats.CreateEntry("NoSway", false,
-                description: "Hold the sight still. Sway is the wobble while aiming, driven "
-                    + "by fatigue, and it is a different system from recoil - this zeroes the "
-                    + "gun's sway range and its build-up rate, and uses the game's own "
-                    + "aim-shake switch for the shake that comes from cold. All of it is put "
-                    + "back when switched off.");
-
             CheatNoDegrade = _cheats.CreateEntry("NoDegradeHeld", false,
                 description: "Keep the item in hand at full condition. A firearm being fired, a hatchet being swung, a lamp being carried - whatever is held stops wearing out, and is topped back up to full the moment it is equipped. Items in the pack are untouched."
                     );
+
+            CheatCentreDot = _cheats.CreateEntry("CentreDot", false,
+                description: "Draw a dot at the centre of the screen, always. It is a measuring "
+                    + "tool rather than a crosshair: with it on, whether the aim is drifting "
+                    + "stops being a matter of impression - the dot does not move, so anything "
+                    + "that does is the weapon or the camera, and the difference is visible at a "
+                    + "glance.");
 
             CheatFreeRepair = _cheats.CreateEntry("FreeRepair", false,
                 description: "Repair any item for nothing: no materials, no tools, no time. It "

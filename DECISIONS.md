@@ -870,3 +870,33 @@ slider, because "1.75x" means nothing and "210m day / 69m night" means everythin
 Same baseline discipline as the survival rates: while the dial sits at 1.00 the game's own numbers
 are tracked as the baseline, and the moment it leaves 1.00 that tracking stops - so a value this mod
 wrote can never become the number it thinks the game shipped.
+
+---
+
+## 2026-09-08 - sway lived in a third place, and the aim was it
+
+Reported: the rifle still sways and still kicks, "different than normal, but definitely still".
+
+The gun's own numbers were zeroed. The weapon model's motion was zeroed. And the sight still
+drifted, because there is a third place and it is the one that matters:
+
+    vp_FPSCamera.m_MaxAmbientSwayAngleDegreesA          a slow wander applied to the camera
+    vp_FPSCamera.m_MaxAmbientAimingSwayAngleDegreesA    the same, while aiming
+
+Those are DEGREES OF CAMERA ROTATION, which is another way of saying "where the shot goes". Neither
+of the first two places could ever have fixed it - the gun numbers govern the game's own sway
+calculation and the weapon fields govern a model that is drawn, but the camera angle is the aim
+itself. Zeroed now, along with the camera's shake and bob, and restored on the way out.
+
+### One switch, not three
+
+His instruction, and the right one: `Cheats.NoSwayOrRecoil` replaces the two separate toggles. That
+three systems had to be found separately is an implementation detail; putting it on the page as
+three switches would make the person using it responsible for knowing that.
+
+### And a centre dot
+
+Also his idea, and it is a measuring instrument rather than a crosshair: a dot at the exact centre of
+the screen cannot move, so anything that does move is the weapon or the camera. "Is it still
+swaying" stops being a matter of impression, which is the same reason every other number in this mod
+gets printed rather than felt.

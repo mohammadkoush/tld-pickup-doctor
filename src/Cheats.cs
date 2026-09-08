@@ -124,6 +124,24 @@ namespace LDPickupDoctor
         private static readonly Dictionary<int, WeaponSway> _origWeaponSway =
             new Dictionary<int, WeaponSway>();
 
+        // THE CAMERA WAS THE MISSING THIRD PLACE, and it is the one that moves the aim.
+        //
+        // The gun's sway numbers were zeroed and the weapon model's motion was zeroed, and the sight
+        // still drifted. vp_FPSCamera carries AMBIENT SWAY IN DEGREES - a slow wander applied to the
+        // camera itself, with a separate figure for while aiming - and degrees of camera rotation are
+        // exactly "where the shot goes". Neither of the first two places could have fixed it.
+        private struct CameraSway
+        {
+            public float Ambient, AmbientAiming, ShakeSpeed;
+            public Vector3 Shake;
+            public Vector4 Bob;
+        }
+
+        private static readonly Dictionary<int, CameraSway> _origCamSway =
+            new Dictionary<int, CameraSway>();
+        private static int _camsHeld;
+        private static List<vp_FPSCamera> _camList; private static float _camNext;
+
         // ---- survival rates ----------------------------------------------------------------------
         // One stored original per field, keyed by a name rather than an instance id: these five are
         // singletons that live for the session, so a name is stable where an id is not.
@@ -243,14 +261,16 @@ namespace LDPickupDoctor
             if (Settings.CheatUnlimitedCarry.Value) s += " carry=" + Settings.CheatCarryKG.Value.ToString("0") + "kg";
             if (Settings.CheatUnlimitedAmmo.Value) s += " ammo(" + _ammoTopUps + " topups)";
             if (Settings.CheatPerpetualFire.Value) s += " perpetualFire(" + _fires.Count + ")";
-            if (Settings.CheatNoRecoil.Value) s += " noRecoil(guns=" + _gunsHeld + " shooters=" + _recoilHeld + ")";
+            if (Settings.CheatSteadyAim.Value)
+                s += " steadyAim(guns=" + _gunsHeld + " shooters=" + _recoilHeld
+                    + " weapons=" + _weaponsHeld + " cams=" + _camsHeld + ")";
             if (!Mathf.Approximately(Settings.RateDaylight.Value, 1f))
                 s += " daylight=" + Settings.RateDaylight.Value.ToString("0.00") + "x";
             if (!Mathf.Approximately(Settings.RateCuring.Value, 1f))
                 s += " curing=" + Settings.RateCuring.Value.ToString("0.00") + "x(" + CuringHeld + ")";
             if (Settings.CheatNoDegrade.Value) s += " noDegrade(" + RepairsMade + ")";
             if (Settings.CheatFreeRepair.Value) s += " freeRepair(" + FreeRepair.Uses + ")";
-            if (Settings.CheatNoSway.Value) s += " noSway(guns=" + _swayHeld + " weapons=" + _weaponsHeld + ")";
+
             return s;
         }
 
@@ -261,8 +281,7 @@ namespace LDPickupDoctor
                 || Settings.CheatUnlimitedCarry.Value
                 || Settings.CheatUnlimitedAmmo.Value
                 || Settings.CheatPerpetualFire.Value
-                || Settings.CheatNoRecoil.Value
-                || Settings.CheatNoSway.Value
+                || Settings.CheatSteadyAim.Value
                 || Settings.CheatNoDegrade.Value
                 || Settings.CheatFreeRepair.Value
                 || !Mathf.Approximately(Settings.RateCuring.Value, 1f)
@@ -738,7 +757,7 @@ namespace LDPickupDoctor
         // ------------------------------------------------------------------------------------------
         private static void Recoil()
         {
-            if (!Settings.CheatNoRecoil.Value)
+            if (!Settings.CheatSteadyAim.Value)
             {
                 if (_origRecoilPos.Count > 0 || _origGunRecoil.Count > 0) RestoreRecoil();
                 return;
@@ -840,7 +859,7 @@ namespace LDPickupDoctor
         // ------------------------------------------------------------------------------------------
         private static void Sway()
         {
-            if (!Settings.CheatNoSway.Value)
+            if (!Settings.CheatSteadyAim.Value)
             {
                 if (_origSway.Count > 0 || _haveAimShakeWas) RestoreSway();
                 return;
@@ -936,6 +955,43 @@ namespace LDPickupDoctor
             {
                 Log.OnceWarn("weaponsway-threw", "the weapon's visual sway could not be zeroed: "
                     + e.Message + " - the aim itself is still held steady.");
+            }
+
+            try
+            {
+                List<vp_FPSCamera> cams = Scan(ref _camList, ref _camNext, ScanPeriod);
+                for (int i = 0; i < cams.Count; i++)
+                {
+                    vp_FPSCamera c = cams[i];
+                    if (c == null) continue;
+                    int id = c.GetInstanceID();
+                    if (!_origCamSway.ContainsKey(id))
+                    {
+                        CameraSway was = new CameraSway();
+                        was.Ambient = c.m_MaxAmbientSwayAngleDegreesA;
+                        was.AmbientAiming = c.m_MaxAmbientAimingSwayAngleDegreesA;
+                        was.Shake = c.ShakeAmplitude;
+                        was.ShakeSpeed = c.ShakeSpeed;
+                        was.Bob = c.BobAmplitude;
+                        _origCamSway[id] = was;
+                        Log.OnceInfo("camsway", "no sway: the camera's ambient sway was "
+                            + was.Ambient.ToString("0.000") + " degrees and "
+                            + was.AmbientAiming.ToString("0.000")
+                            + " while aiming. Those are degrees of camera rotation, which is where "
+                            + "the shot goes - the gun and the weapon model could never have fixed "
+                            + "this on their own.");
+                    }
+                    c.m_MaxAmbientSwayAngleDegreesA = 0f;
+                    c.m_MaxAmbientAimingSwayAngleDegreesA = 0f;
+                    c.ShakeAmplitude = Vector3.zero;
+                    c.BobAmplitude = Vector4.zero;
+                }
+                _camsHeld = cams.Count;
+            }
+            catch (System.Exception e)
+            {
+                Log.OnceWarn("camsway-threw", "the camera's ambient sway could not be zeroed: "
+                    + e.Message + " - retried each second.");
             }
         }
 
@@ -1035,6 +1091,29 @@ namespace LDPickupDoctor
         private static void RestoreSway()
         {
             int n = 0;
+
+            // The camera first, because it is the one that was actually moving the aim.
+            try
+            {
+                Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<vp_FPSCamera> cams =
+                    Object.FindObjectsOfType<vp_FPSCamera>();
+                for (int i = 0; i < cams.Length; i++)
+                {
+                    vp_FPSCamera c = cams[i];
+                    if (c == null) continue;
+                    CameraSway cw;
+                    if (!_origCamSway.TryGetValue(c.GetInstanceID(), out cw)) continue;
+                    c.m_MaxAmbientSwayAngleDegreesA = cw.Ambient;
+                    c.m_MaxAmbientAimingSwayAngleDegreesA = cw.AmbientAiming;
+                    c.ShakeAmplitude = cw.Shake;
+                    c.ShakeSpeed = cw.ShakeSpeed;
+                    c.BobAmplitude = cw.Bob;
+                }
+            }
+            catch (System.Exception) { }
+            _origCamSway.Clear();
+            _camsHeld = 0;
+
             try
             {
                 Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<GunItem> guns =

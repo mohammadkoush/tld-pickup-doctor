@@ -651,10 +651,10 @@ namespace LDPickupDoctor
             Slider(Settings.CheatCarryKG, 30f, 2000f, "What unlimited means (kg)");
             Toggle(Settings.CheatUnlimitedAmmo, "Unlimited ammo in the gun you hold");
             Toggle(Settings.CheatPerpetualFire, "Fires, stoves and fireplaces never go out");
-            Toggle(Settings.CheatNoRecoil, "No firearm recoil");
-            Toggle(Settings.CheatNoSway, "No aim sway");
+            Toggle(Settings.CheatSteadyAim, "No sway or recoil");
             Toggle(Settings.CheatNoDegrade, "Held item never wears out");
             Toggle(Settings.CheatFreeRepair, "Repair anything for free");
+            Toggle(Settings.CheatCentreDot, "Centre dot (to see sway and recoil)");
 
             GUILayout.Space(10f);
             GUI.color = new Color(0.75f, 0.85f, 0.95f);
@@ -1010,6 +1010,27 @@ namespace LDPickupDoctor
             GUI.color = new Color(1f, 0.72f, 0.35f, alpha);
             GUI.Label(new Rect(box.x + 12f, box.y + 8f, box.width - 24f, box.height - 16f),
                 "LD PICKUP DOCTOR - " + ShotWatch.CollisionText, _label);
+            GUI.color = was;
+        }
+
+        /// <summary>
+        /// A dot at the exact centre of the screen. A measuring tool rather than an aiming aid: it
+        /// cannot move, so anything that does move is the weapon or the camera - and "is it still
+        /// swaying" stops being a matter of impression.
+        /// </summary>
+        public static void DrawCentreDot()
+        {
+            if (!Settings.CheatCentreDot.Value) return;
+            EnsureSkin();
+            float x = Screen.width * 0.5f;
+            float y = Screen.height * 0.5f;
+            Color was = GUI.color;
+            // A dark square behind a bright core, so it reads against snow and against a dark cabin
+            // without needing a texture or an asset bundle.
+            GUI.color = new Color(0f, 0f, 0f, 0.85f);
+            GUI.DrawTexture(new Rect(x - 3f, y - 3f, 6f, 6f), _bg, ScaleMode.StretchToFill);
+            GUI.color = new Color(1f, 0.95f, 0.4f, 0.95f);
+            GUI.DrawTexture(new Rect(x - 1f, y - 1f, 2f, 2f), _stripBg, ScaleMode.StretchToFill);
             GUI.color = was;
         }
 
