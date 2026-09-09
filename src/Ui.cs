@@ -668,7 +668,7 @@ namespace LDPickupDoctor
             Slider(Settings.RateHunger, 0f, 3f, "Food - how fast calories burn");
             Slider(Settings.RateStamina, 0f, 3f, "Stamina - how fast sprinting drains it");
             Slider(Settings.RateCuring, 1f, 100f, "Curing speed - hides and guts (100 is near instant)");
-            Slider(Settings.RateDaylight, 0.25f, 4f, "Daylight - longer days, shorter nights");
+            Slider(Settings.RateDaylight, 0.25f, 4f, "Daylight - longer days (night is left alone)");
             if (Cheats.DayNightNow.Length > 0)
             {
                 GUILayout.BeginHorizontal();

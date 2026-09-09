@@ -352,12 +352,12 @@ namespace LDPickupDoctor
                     + "and cannot be reached any other way.");
 
             RateDaylight = _cheats.CreateEntry("DaylightBalance", 1.0f,
-                description: "Longer days and shorter nights, on one dial. The day length is "
-                    + "multiplied by it and the night length divided by it, so 2.00 is twice the "
-                    + "daylight and half the dark while a full cycle still takes about as long as "
-                    + "it did. 1.00 is off and puts both back. One dial rather than two because "
-                    + "the thing wanted is the ratio - two sliders drift into a forty hour day "
-                    + "nobody asked for.");
+                description: "Longer days. The day length is "
+                    + "multiplied by it. The night is deliberately NOT shortened: these are real "
+                    + "minutes for a stretch of game clock, so compressing the night would make the "
+                    + "same game hours pass faster after dark - and every drain in this game is per "
+                    + "GAME hour, so hunger, thirst and cold would all race at night. 1.00 is off. "
+                    + "Above 1 simply means more daylight in a longer cycle.");
 
             RateCuring = _cheats.CreateEntry("CuringSpeed", 1.0f,
                 description: "How fast hides, guts and anything else that cures over time get "

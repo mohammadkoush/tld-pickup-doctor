@@ -1286,11 +1286,22 @@ namespace LDPickupDoctor
                         + " minutes of day and " + _origNightMinutes + " of night.");
                 }
 
+                // THE NIGHT IS LEFT ALONE, AND THAT IS A CORRECTION RATHER THAN A CHOICE.
+                //
+                // The first version divided the night by the same figure, which looked symmetrical
+                // and was actively harmful. These durations are REAL minutes for a stretch of game
+                // clock. Compressing the night into a quarter of the real time does not shorten the
+                // night - the same in-game hours still pass, four times faster - and every drain in
+                // this game is per GAME hour. Hunger, thirst, fatigue and cold all ran at four times
+                // speed after dark, which from inside the game looks exactly like being punished for
+                // cheating. It was reported as precisely that.
+                //
+                // So the dial lengthens the DAY and nothing else. More daylight per cycle, which is
+                // what was wanted, and no stretch of the clock that runs fast.
                 int day = Mathf.Max(1, Mathf.RoundToInt(_origDayMinutes * dial));
-                int night = Mathf.Max(1, Mathf.RoundToInt(_origNightMinutes / dial));
                 tod.m_DayDurationInMinutes = day;
-                tod.m_NightDurationInMinutes = night;
-                DayNightNow = day + "m day / " + night + "m night";
+                tod.m_NightDurationInMinutes = _origNightMinutes;
+                DayNightNow = day + "m day / " + _origNightMinutes + "m night (night untouched on purpose)";
             }
             catch (System.Exception e)
             {

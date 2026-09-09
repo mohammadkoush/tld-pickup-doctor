@@ -923,3 +923,30 @@ it correctly - which is the cruellest shape of bug, because the mechanism works 
 gets a turn. One sweep is 250ms and that is all the window a race like this needs.
 
 `NoteOnGround` now runs before `Judge`, with a comment saying why the order is the feature.
+
+---
+
+## 2026-09-08 - "the game caught me cheating and started draining every stat"
+
+It had not. The Long Dark has no anti-cheat and Hinterland does not punish modding or save editing -
+checked, and the community has open trainers and cheat tables for it. **The cause was mine**, and
+the log named it before any searching: `daylight=4.00x`.
+
+`m_DayDurationInMinutes` and `m_NightDurationInMinutes` are REAL minutes for a stretch of game clock.
+The first version of the dial multiplied the day and DIVIDED THE NIGHT by the same figure, which
+looked pleasingly symmetrical and was actively harmful: compressing the night into a quarter of the
+real time does not shorten the night, it makes the same in-game hours pass four times faster. Every
+drain in this game is per GAME hour, so hunger, thirst, fatigue and cold all ran at four times speed
+after dark.
+
+From inside the game that looks exactly like being punished for cheating, which is precisely how it
+was reported. A mod that produces a symptom indistinguishable from an accusation is worse than a mod
+that does nothing.
+
+**The night is left alone now.** The dial lengthens the day and nothing else - more daylight per
+cycle, which is what was actually wanted, and no stretch of clock that runs fast. The tooltip
+carries the reasoning so nobody re-adds the symmetry later thinking it was an oversight.
+
+The general lesson, and it is the one this project keeps paying for: a number that looks like a
+ratio is not necessarily a ratio of the thing you care about. These were minutes of REAL time, and
+the thing being scaled was the speed of GAME time.
