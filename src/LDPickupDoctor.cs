@@ -64,6 +64,7 @@ namespace LDPickupDoctor
             Hotkeys();
             Settings.FlushSaves();
             ShotWatch.Tick();
+            StatWatch.Tick();
 
             Transform player = null;
             try { player = GameManager.GetPlayerTransform(); } catch (System.Exception) { }

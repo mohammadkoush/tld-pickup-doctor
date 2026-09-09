@@ -164,6 +164,7 @@ namespace LDPickupDoctor
         public static MelonPreferences_Entry<float> DiagReportSeconds;
         public static MelonPreferences_Entry<bool> DiagLogEveryRefusal;
         public static MelonPreferences_Entry<bool> WatchScreenshots;
+        public static MelonPreferences_Entry<bool> WatchStats;
 
         public static void Load()
         {
@@ -462,6 +463,13 @@ namespace LDPickupDoctor
                     + "name belongs to the game, the mod has no screenshot code at all, and one "
                     + "coincidence with a hotkey explained three of the 52 at best. One folder "
                     + "listing every two seconds, and it stops looking after a quiet hour.");
+
+            WatchStats = _diag.CreateEntry("WatchStats", true,
+                description: "Sample condition, calories, thirst, fatigue and freezing every two "
+                    + "seconds and write a line whenever one of them moves faster than it should, "
+                    + "naming which one and what every dial was set to at that moment. It exists "
+                    + "because one stat draining at a time was reported and no explanation fitted - "
+                    + "and a measurement beats a better guess.");
 
             DiagEnabled = _diag.CreateEntry("Enabled", true,
                 description: "Count what the sweep decided and write it to the MelonLoader log.");
