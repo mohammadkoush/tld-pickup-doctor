@@ -1021,6 +1021,12 @@ namespace LDPickupDoctor
         public static void DrawCentreDot()
         {
             if (!Settings.CheatCentreDot.Value) return;
+
+            // NOT UNTIL THERE IS A WORLD TO AIM IN. OnGUI is alive from the studio logo onward, so
+            // without this the dot sits over the title screen and the load screen, where there is
+            // nothing to measure and it only reads as a scratch on the monitor.
+            if (!PickupDoctorMod.InWorld) return;
+
             EnsureSkin();
 
             // A WHITE TEXTURE, WHICH IS THE WHOLE FIX. The first version tinted _bg and _stripBg -

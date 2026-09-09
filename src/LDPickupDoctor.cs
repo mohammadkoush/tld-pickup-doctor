@@ -33,6 +33,14 @@ namespace LDPickupDoctor
     {
         private float _nextSweep;
         private bool _worldReady;
+
+        /// <summary>
+        /// True only while there is a player standing in a loaded world. OnGUI runs from the moment
+        /// the studio logo appears, long before any save is loaded, so anything drawn on the screen
+        /// has to ask this first or it shows up over the title screen. Answered from the update loop
+        /// rather than re-asked per draw, because OnGUI is called several times a frame.
+        /// </summary>
+        public static bool InWorld;
         private int _sceneStamp;
         private float _lastWorldLog;
 
@@ -55,6 +63,7 @@ namespace LDPickupDoctor
             Cheats.ForgetScene();
             _sceneStamp++;
             _worldReady = false;
+            InWorld = false;
         }
 
         public override void OnUpdate()
@@ -71,6 +80,7 @@ namespace LDPickupDoctor
 
             bool inWorld = player != null;
             try { if (GameManager.IsMainMenuActive()) inWorld = false; } catch (System.Exception) { }
+            InWorld = inWorld;
 
             if (!inWorld)
             {

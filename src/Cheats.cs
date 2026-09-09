@@ -1255,6 +1255,55 @@ namespace LDPickupDoctor
             float dial = Mathf.Clamp(Settings.RateDaylight.Value, 0.25f, 4f);
             bool neutral = Mathf.Approximately(dial, 1f);
 
+            // A BASELINE OF ZERO IS NOT A BASELINE, AND THIS COST A CHARACTER'S LIFE.
+            //
+            // The first version captured the day and night durations the moment the dial was first
+            // read - which was at the main menu, before TimeOfDay had been initialised, when both
+            // fields are still 0. Then, every sweep after that, it wrote:
+            //
+            //     day   = max(1, round(0 * dial))  = 1 minute
+            //     night = max(1, round(0 / dial))  = 1 minute
+            //
+            // A one minute day and a one minute night. A full cycle passed every two real minutes,
+            // game hours poured by, and body temperature collapsed - while hunger, thirst and
+            // fatigue said nothing because their rates had been dialled to zero by hand. One stat
+            // draining "randomly" was one stat still able to report.
+            //
+            // And the log had said so from the start, in as many words: "the game's own cycle is 0
+            // minutes of day and 0 of night". It was written, and it was not read.
+            //
+            // So a baseline is only accepted when it is plausible, and nothing is written until one
+            // exists. The game ships day and night lengths in the tens of minutes; anything under
+            // five is not a shorter day, it is an uninitialised field.
+            bool sane = false;
+            try { sane = tod.m_DayDurationInMinutes >= 5 && tod.m_NightDurationInMinutes >= 5; }
+            catch (System.Exception) { }
+
+            if (!_haveDayNight && !sane)
+            {
+                // The same refusal either way, but not the same report. Outside a world this is
+                // ordinary and expected; INSIDE one it means the clock itself is wrong, which is
+                // the fault that killed a character, and it must not be filed under "still warming
+                // up". A degraded state that describes itself as normal is the thing to avoid.
+                if (PickupDoctorMod.InWorld)
+                {
+                    Log.OnceWarn("daynight-broken", "the world is loaded but the clock reports a "
+                        + tod.m_DayDurationInMinutes + " minute day and a "
+                        + tod.m_NightDurationInMinutes + " minute night. Those are not real lengths, "
+                        + "and a world running that fast will drain body temperature no matter what "
+                        + "the survival dials say. The daylight dial is standing down until the "
+                        + "clock reports sane lengths; restart the game if it persists.");
+                }
+                else
+                {
+                    Log.OnceWarn("daynight-early", "the day and night lengths read as "
+                        + tod.m_DayDurationInMinutes + " and " + tod.m_NightDurationInMinutes
+                        + " minutes, which means the clock is not initialised yet. Nothing is written "
+                        + "until it is - a baseline of zero would turn into a one minute day.");
+                }
+                return;
+            }
+
             try
             {
                 if (neutral)
@@ -1281,6 +1330,15 @@ namespace LDPickupDoctor
 
                 if (!_haveDayNight)
                 {
+                    // Refuse to start from a baseline that cannot be right, however it got here.
+                    if (_origDayMinutes < 5 || _origNightMinutes < 5)
+                    {
+                        Log.OnceWarn("daynight-bad", "refusing to scale a day of " + _origDayMinutes
+                            + " minutes and a night of " + _origNightMinutes
+                            + " - those are not real values, and multiplying them would make the "
+                            + "world race. The dial does nothing until the clock reports sane ones.");
+                        return;
+                    }
                     _haveDayNight = true;
                     Log.Info("day length dial on - the game's own cycle is " + _origDayMinutes
                         + " minutes of day and " + _origNightMinutes + " of night.");

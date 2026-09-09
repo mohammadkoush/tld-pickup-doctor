@@ -950,3 +950,59 @@ carries the reasoning so nobody re-adds the symmetry later thinking it was an ov
 The general lesson, and it is the one this project keeps paying for: a number that looks like a
 ratio is not necessarily a ratio of the thing you care about. These were minutes of REAL time, and
 the thing being scaled was the speed of GAME time.
+
+---
+
+## 2026-09-08 - the same stat drain, second cause: a baseline of zero
+
+Lengthening the day was not the whole of it. The stat drain came back on a fresh save, in the first
+minute of a new playthrough, before a single step was taken. Body temperature only - again.
+
+**The log had already said it, an hour earlier, in as many words:**
+
+    [20:05:34.644] day length dial on - the game's own cycle is 0 minutes of day and 0 of night.
+
+`DayNight()` captured its baseline the first time it read `TimeOfDay`, which was at the main menu,
+where `m_DayDurationInMinutes` and `m_NightDurationInMinutes` are still `0`. From then on every
+sweep wrote:
+
+    day   = max(1, round(0 * dial)) = 1 minute
+    night = max(1, round(0 / dial)) = 1 minute
+
+A one minute day and a one minute night. A full cycle every two real minutes, game hours pouring
+past, and cold collapsing. Hunger, thirst and fatigue said nothing only because their rate dials
+had been set to `0.00` by hand - so the "one stat draining at random" was the one stat still able
+to report. The randomness was an artefact of the instruments, not the fault.
+
+**Fixes, all three of them:**
+
+1. A baseline is only accepted when it is plausible. The game ships day and night lengths in the
+   tens of minutes; anything under five is an uninitialised field, not a short day. Nothing is
+   written until a sane pair has been read.
+2. Scaling refuses to start from an implausible baseline however it got there, and says so once.
+3. The refusal reports differently inside a loaded world than outside one. Outside, "not
+   initialised yet" is the truth. Inside, the clock is genuinely wrong and the line says so, names
+   the numbers, and tells the reader that no survival dial can compensate for it. A degraded state
+   that describes itself as normal is the failure worth designing against.
+
+**The rule this broke** is the station's own: *before naming a cause, find the line that states it*.
+The line existed, timestamped, an hour old, and two wrong causes were reasoned out instead of read.
+Anti-cheat was blamed first, then the night compression - and the person playing killed the second
+one with a single observation that did not fit it: "why, one stat at a time, gets drained randomly?
+Not all stats at once."
+
+---
+
+## 2026-09-08 - the centre dot drew over the title screen
+
+Reported: "the dot on the screen is loading way before I have even a save loaded. It starts when the
+game logo is on."
+
+`OnGUI` runs from the moment MelonLoader is up, which is long before any world exists, so anything
+drawn there shows over the studio logo, the menu and the load screen. `DrawCentreDot` now returns
+unless a player is standing in a loaded world.
+
+The answer is cached rather than asked per draw: `PickupDoctorMod.InWorld` is set once per update
+from the check the sweep already performs, and cleared on scene change. `OnGUI` is called several
+times a frame - layout and repaint at minimum - so asking `GameManager` there would be three or four
+times the calls for an answer that cannot change between them.

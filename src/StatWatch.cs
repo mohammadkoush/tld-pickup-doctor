@@ -92,9 +92,35 @@ namespace LDPickupDoctor
             if (rate < perSecondLimit) return;
 
             Alarms++;
+
+            // THE CLOCK ITSELF, because it is the suspect the other numbers cannot see.
+            //
+            // Only temperature was draining, and that looked impossible until the dials were read
+            // back: tiredness, thirst and hunger were all pinned at 0.00 by hand, so their rates
+            // were literally zero and COLD WAS THE ONLY STAT ABLE TO SHOW ANYTHING. If game time is
+            // running fast, that is exactly the shape it would take - not one stat being attacked,
+            // but one stat left able to report.
+            //
+            // TimeOfDay.m_DayLengthScale is how the game itself accelerates time: every timed action
+            // in the game - repair, harvest, break-down, milling - saves it, raises it, and restores
+            // it afterwards. A scale left high by something that did not finish restoring would run
+            // the world fast with no other sign.
+            string clock = "unknown";
+            try
+            {
+                TimeOfDay tod = GameManager.GetTimeOfDayComponent();
+                if (tod != null)
+                {
+                    clock = tod.m_DayLengthScale.ToString("0.000")
+                        + " (day " + tod.m_DayDurationInMinutes
+                        + "m, night " + tod.m_NightDurationInMinutes + "m)";
+                }
+            }
+            catch (System.Exception) { }
+
             Log.Warn("stat watch: " + name + " moved " + rate.ToString("0.0")
-                + " per second (now " + now.ToString("0.0") + "). Mod dials at this moment - "
-                + "cold " + Settings.RateCold.Value.ToString("0.00")
+                + " per second (now " + now.ToString("0.0") + "). CLOCK SCALE " + clock
+                + ". Mod dials - cold " + Settings.RateCold.Value.ToString("0.00")
                 + ", tired " + Settings.RateTired.Value.ToString("0.00")
                 + ", thirst " + Settings.RateThirst.Value.ToString("0.00")
                 + ", hunger " + Settings.RateHunger.Value.ToString("0.00")
